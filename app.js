@@ -1678,6 +1678,19 @@ function updateTimer(){
   }
 
   if (now < currentPeriod.start) {
+    const refreshKey =
+    `refreshBeforeStart_${currentHall}_${currentPeriod.start.getTime()}`;
+  const msToStart = currentPeriod.start - now;
+  if (
+      msToStart <= (5 * 60 * 1000) &&
+      msToStart > 0 &&
+      !sessionStorage.getItem(refreshKey)
+  ) {
+      sessionStorage.setItem(refreshKey, "1");
+      setTimeout(() => {
+          location.reload();
+      }, 300);
+  }
     disableWakeLock();
     document.body.classList.remove("display-running", "single-course", "multi-course", "many-courses");
     timerEl.textContent = "لم يبدأ الوقت";
