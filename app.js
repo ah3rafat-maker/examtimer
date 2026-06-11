@@ -114,18 +114,8 @@ function isSupportLoggedIn(){
 }
 async function ensurePrimaryAdminDoc(){
   if (!cloudDb) return false;
-  try {
-    await adminDoc(PRIMARY_ADMIN_EMAIL).set({
-      email: PRIMARY_ADMIN_EMAIL,
-      role: "owner",
-      protected: true,
-      createdAt: window.firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-    return true;
-  } catch (err) {
-    console.warn("Could not ensure primary admin", err);
-    return false;
-  }
+  return true;
+
 }
 async function isAuthorizedAdmin(email){
   const normalized = normalizeEmail(email);
