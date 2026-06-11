@@ -16,7 +16,7 @@ const STORE_KEYS = {
   beepFifteenDuration: "finalExamTimer.beepFifteenDuration",
   beepEndDuration: "finalExamTimer.beepEndDuration"
 };
-
+ 
 const DEFAULT_PASSWORD = "1234";
 const FIRESTORE_DOCS = {
   settings: ["settings", "config"],
