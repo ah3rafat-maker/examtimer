@@ -14,7 +14,11 @@ const STORE_KEYS = {
   beepStartDuration: "finalExamTimer.beepStartDuration",
   beepHalfDuration: "finalExamTimer.beepHalfDuration",
   beepFifteenDuration: "finalExamTimer.beepFifteenDuration",
-  beepEndDuration: "finalExamTimer.beepEndDuration"
+  beepEndDuration: "finalExamTimer.beepEndDuration",
+  beepStartEnabled: "finalExamTimer.beepStartEnabled",
+  beepHalfEnabled: "finalExamTimer.beepHalfEnabled",
+  beepFifteenEnabled: "finalExamTimer.beepFifteenEnabled",
+  beepEndEnabled: "finalExamTimer.beepEndEnabled"
 };
 
 const DEFAULT_PASSWORD = "1234";
@@ -101,6 +105,17 @@ function getBeepDurationSetting(kind){
   const raw = (cloudSettingsCache && cloudSettingsCache[item[1]]) || localStorage.getItem(item[0]) || String(item[2]);
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : item[2];
+}
+function isBeepEnabled(kind){
+  const map = { start: [STORE_KEYS.beepStartEnabled, "beepStartEnabled"], half: [STORE_KEYS.beepHalfEnabled, "beepHalfEnabled"], fifteen: [STORE_KEYS.beepFifteenEnabled, "beepFifteenEnabled"], end: [STORE_KEYS.beepEndEnabled, "beepEndEnabled"] };
+  const item = map[kind] || map.half;
+  const cloudVal = cloudSettingsCache ? cloudSettingsCache[item[1]] : undefined;
+  const localVal = localStorage.getItem(item[0]);
+  const raw = cloudVal !== undefined ? String(cloudVal) : (localVal !== null ? localVal : "true");
+  return raw !== "false" && raw !== "0";
+}
+function playConfiguredBeep(kind){
+  if (isBeepEnabled(kind)) playBeep(getBeepDurationSetting(kind));
 }
 function attendanceReportsCollection(){
   if (!cloudDb) return null;
@@ -295,7 +310,7 @@ function initCloudSync(){
 
     firestoreDoc(FIRESTORE_DOCS.settings).onSnapshot(snap => {
       const settings = snap.exists ? (snap.data() || {}) : {};
-      if (!snap.exists) saveCloudSettings({ password: DEFAULT_PASSWORD, supportCode: localStorage.getItem(STORE_KEYS.supportCode) || "2026", attendanceTime: localStorage.getItem(STORE_KEYS.attendanceTime) || "30", supportChairName: localStorage.getItem(STORE_KEYS.supportChairName) || "", supportChairTitle: localStorage.getItem(STORE_KEYS.supportChairTitle) || "", beepStartDuration: localStorage.getItem(STORE_KEYS.beepStartDuration) || "3", beepHalfDuration: localStorage.getItem(STORE_KEYS.beepHalfDuration) || "3", beepFifteenDuration: localStorage.getItem(STORE_KEYS.beepFifteenDuration) || "1", beepEndDuration: localStorage.getItem(STORE_KEYS.beepEndDuration) || "10", semester: localStorage.getItem(STORE_KEYS.semester) || "ربيع", academicYear: localStorage.getItem(STORE_KEYS.academicYear) || "2025 - 2026", createdAt: Date.now() });
+      if (!snap.exists) saveCloudSettings({ password: DEFAULT_PASSWORD, supportCode: localStorage.getItem(STORE_KEYS.supportCode) || "2026", attendanceTime: localStorage.getItem(STORE_KEYS.attendanceTime) || "30", supportChairName: localStorage.getItem(STORE_KEYS.supportChairName) || "", supportChairTitle: localStorage.getItem(STORE_KEYS.supportChairTitle) || "", beepStartDuration: localStorage.getItem(STORE_KEYS.beepStartDuration) || "3", beepHalfDuration: localStorage.getItem(STORE_KEYS.beepHalfDuration) || "3", beepFifteenDuration: localStorage.getItem(STORE_KEYS.beepFifteenDuration) || "1", beepEndDuration: localStorage.getItem(STORE_KEYS.beepEndDuration) || "10", beepStartEnabled: localStorage.getItem(STORE_KEYS.beepStartEnabled) || "true", beepHalfEnabled: localStorage.getItem(STORE_KEYS.beepHalfEnabled) || "true", beepFifteenEnabled: localStorage.getItem(STORE_KEYS.beepFifteenEnabled) || "true", beepEndEnabled: localStorage.getItem(STORE_KEYS.beepEndEnabled) || "true", semester: localStorage.getItem(STORE_KEYS.semester) || "ربيع", academicYear: localStorage.getItem(STORE_KEYS.academicYear) || "2025 - 2026", createdAt: Date.now() });
       cloudSettingsCache = settings;
       applyForceReleaseFromSettings(settings);
       suppressCloudSave = true;
@@ -311,6 +326,7 @@ function initCloudSync(){
       if (settings.beepHalfDuration) localStorage.setItem(STORE_KEYS.beepHalfDuration, String(settings.beepHalfDuration));
       if (settings.beepFifteenDuration) localStorage.setItem(STORE_KEYS.beepFifteenDuration, String(settings.beepFifteenDuration));
       if (settings.beepEndDuration) localStorage.setItem(STORE_KEYS.beepEndDuration, String(settings.beepEndDuration));
+      ["Start","Half","Fifteen","End"].forEach(k => { const prop = "beep" + k + "Enabled"; const key = STORE_KEYS["beep" + k + "Enabled"]; if (settings[prop] !== undefined && key) localStorage.setItem(key, String(settings[prop])); });
       if (settings.updatedAt) localStorage.setItem("finalExamTimer.exams.updatedAt", String(settings.updatedAt));
       suppressCloudSave = false;
       const cloudRows = parseCloudRowsFromSettings(settings);
@@ -598,7 +614,7 @@ function getExamSeason(date = new Date()){
     return { active:true, semester:`ربيع ${y}`, academicYear:`${y - 1} - ${y}` };
   }
   if ((m === 8 && d >= 16) || (m === 9 && d <= 7)) {
-    return { active:true, semester:`صيفي ${y}`, academicYear:`${y - 1} - ${y}` };
+    return { active:true, semester:`صيف ${y}`, academicYear:`${y - 1} - ${y}` };
   }
   return { active:false };
 }
@@ -1273,6 +1289,11 @@ async function submitAttendanceReport(){
     const examKey = tr.dataset.examKey;
     const e = activePeriodExams.find(x => sectionExamKey(x) === examKey);
     const n = Number(tr.querySelector('[data-absence-input]')?.value || 0) || 0;
+    if (e && n > Number(e.students || 0)) {
+      attendanceSubmitInProgress = false;
+      if (btn) btn.disabled = false;
+      throw new Error(`ABSENCE_OVER_LIMIT:${e.courseName}:${e.courseCode}:${e.section}:${e.students}`);
+    }
     if (e && n > 0) {
       total += n;
       const msg = `يوجد غياب عدد ${toArabicDigits(n)} طالب في مقرر (${e.courseName} - ${e.courseCode}) شعبة ${getSectionTypeLabel(e.section)}`;
@@ -1315,6 +1336,11 @@ async function submitAttendanceReport(){
     console.error(err);
     attendanceSubmitInProgress = false;
     if (btn) btn.disabled = false;
+    const msg = String(err && err.message || "");
+    if (msg.startsWith("ABSENCE_OVER_LIMIT:")) {
+      const parts = msg.split(":");
+      return alert(`لا يمكن أن يتجاوز عدد الغياب عدد الطلبة المسجلين بالشعبة (${toArabicDigits(parts[4] || "0")} طالبًا).`);
+    }
     alert("تعذر إرسال بيانات الغياب. تحقق من قواعد Firestore.");
   }
 }
@@ -1868,7 +1894,7 @@ function updateTimer(){
 
   if (!startHandled) {
     startHandled = true;
-    playBeep(getBeepDurationSetting("start"));
+    playConfiguredBeep("start");
   }
   document.body.classList.add("display-running");
   enableWakeLock();
@@ -1880,12 +1906,12 @@ function updateTimer(){
 
   if (!halfHandled && elapsed >= currentPeriod.durationMs / 2 && rawRemaining > 0) {
     halfHandled = true;
-    playBeep(getBeepDurationSetting("half"));
+    playConfiguredBeep("half");
   }
 
   if (!fifteenMinuteHandled && rawRemaining <= 15 * 60 * 1000 && rawRemaining > 0) {
     fifteenMinuteHandled = true;
-    playBeep(getBeepDurationSetting("fifteen"));
+    playConfiguredBeep("fifteen");
   }
 
   if (!endHandled && rawRemaining <= 0) {
@@ -1893,7 +1919,7 @@ function updateTimer(){
     disableWakeLock();
     timerEl.textContent = "انتهى الوقت";
     timerEl.classList.add("timer-ended");
-    playBeep(getBeepDurationSetting("end"));
+    playConfiguredBeep("end");
     document.body.classList.remove("display-running", "single-course", "multi-course", "many-courses");
     document.getElementById("homeBtn")?.classList.remove("hidden");
     if (document.fullscreenElement) {
@@ -2000,12 +2026,16 @@ function initTermSettings(){
   const beepHalfDurationInput = document.getElementById("beepHalfDurationInput");
   const beepFifteenDurationInput = document.getElementById("beepFifteenDurationInput");
   const beepEndDurationInput = document.getElementById("beepEndDurationInput");
+  const beepStartEnabledInput = document.getElementById("beepStartEnabledInput");
+  const beepHalfEnabledInput = document.getElementById("beepHalfEnabledInput");
+  const beepFifteenEnabledInput = document.getElementById("beepFifteenEnabledInput");
+  const beepEndEnabledInput = document.getElementById("beepEndEnabledInput");
+  const saveAlertsBtn = document.getElementById("saveAlertsBtn");
+  const saveAbsenceSettingsBtn = document.getElementById("saveAbsenceSettingsBtn");
   const supportCurrentCodeInput = document.getElementById("supportCurrentCodeInput");
   const supportNewCodeInput = document.getElementById("supportNewCodeInput");
   const supportConfirmCodeInput = document.getElementById("supportConfirmCodeInput");
   const saveSupportCodeBtn = document.getElementById("saveSupportCodeBtn");
-  const supportChairNameInput = document.getElementById("supportChairNameInput");
-  const supportChairTitleInput = document.getElementById("supportChairTitleInput");
   if (!semesterSelect || !academicYearInput || !saveBtn) return;
   const fallback = getExamSeason();
   const fallbackSemester = fallback.active ? String(fallback.semester).split(" ")[0] : "ربيع";
@@ -2017,67 +2047,105 @@ function initTermSettings(){
   if (beepHalfDurationInput) beepHalfDurationInput.value = localStorage.getItem(STORE_KEYS.beepHalfDuration) || (cloudSettingsCache && cloudSettingsCache.beepHalfDuration) || "3";
   if (beepFifteenDurationInput) beepFifteenDurationInput.value = localStorage.getItem(STORE_KEYS.beepFifteenDuration) || (cloudSettingsCache && cloudSettingsCache.beepFifteenDuration) || "1";
   if (beepEndDurationInput) beepEndDurationInput.value = localStorage.getItem(STORE_KEYS.beepEndDuration) || (cloudSettingsCache && cloudSettingsCache.beepEndDuration) || "10";
+  if (beepStartEnabledInput) beepStartEnabledInput.checked = isBeepEnabled("start");
+  if (beepHalfEnabledInput) beepHalfEnabledInput.checked = isBeepEnabled("half");
+  if (beepFifteenEnabledInput) beepFifteenEnabledInput.checked = isBeepEnabled("fifteen");
+  if (beepEndEnabledInput) beepEndEnabledInput.checked = isBeepEnabled("end");
   [supportCurrentCodeInput, supportNewCodeInput, supportConfirmCodeInput].forEach(el => { if (el) el.value = ""; });
-  if (supportChairNameInput) supportChairNameInput.value = localStorage.getItem(STORE_KEYS.supportChairName) || (cloudSettingsCache && cloudSettingsCache.supportChairName) || "";
-  if (supportChairTitleInput) supportChairTitleInput.value = localStorage.getItem(STORE_KEYS.supportChairTitle) || (cloudSettingsCache && cloudSettingsCache.supportChairTitle) || "";
 
   saveBtn.addEventListener("click", () => {
     const sem = semesterSelect.value;
     const ay = academicYearInput.value.trim();
-    const attendanceTime = attendanceTimeInput ? attendanceTimeInput.value.trim() : "30";
+    if (!sem || !ay) return alert("يرجى اختيار الفصل الدراسي وإدخال العام الأكاديمي.");
+    if (!requireCloudForSharedSave()) return;
+    localStorage.setItem(STORE_KEYS.semester, sem);
+    localStorage.setItem(STORE_KEYS.academicYear, ay);
+    saveCloudSettings({ semester: sem, academicYear: ay });
+    setTitles();
+    alert("تم حفظ إعدادات النظام.");
+  });
+
+  saveAlertsBtn?.addEventListener("click", () => {
     const beepStartDuration = beepStartDurationInput ? beepStartDurationInput.value.trim() : "3";
     const beepHalfDuration = beepHalfDurationInput ? beepHalfDurationInput.value.trim() : "3";
     const beepFifteenDuration = beepFifteenDurationInput ? beepFifteenDurationInput.value.trim() : "1";
     const beepEndDuration = beepEndDurationInput ? beepEndDurationInput.value.trim() : "10";
-    if (!sem || !ay) return alert("يرجى اختيار الفصل الدراسي وإدخال العام الأكاديمي.");
-    if (!attendanceTime || Number(attendanceTime) <= 0) return alert("يرجى إدخال وقت تسجيل الغياب بالدقائق.");
     if (!beepStartDuration || Number(beepStartDuration) <= 0 || !beepHalfDuration || Number(beepHalfDuration) <= 0 || !beepFifteenDuration || Number(beepFifteenDuration) <= 0 || !beepEndDuration || Number(beepEndDuration) <= 0) return alert("يرجى إدخال مدد التنبيه الصوتي بالثواني.");
     if (!requireCloudForSharedSave()) return;
-    localStorage.setItem(STORE_KEYS.semester, sem);
-    localStorage.setItem(STORE_KEYS.academicYear, ay);
-    localStorage.setItem(STORE_KEYS.attendanceTime, attendanceTime);
+    const beepStartEnabled = !!beepStartEnabledInput?.checked;
+    const beepHalfEnabled = !!beepHalfEnabledInput?.checked;
+    const beepFifteenEnabled = !!beepFifteenEnabledInput?.checked;
+    const beepEndEnabled = !!beepEndEnabledInput?.checked;
     localStorage.setItem(STORE_KEYS.beepStartDuration, beepStartDuration);
     localStorage.setItem(STORE_KEYS.beepHalfDuration, beepHalfDuration);
     localStorage.setItem(STORE_KEYS.beepFifteenDuration, beepFifteenDuration);
     localStorage.setItem(STORE_KEYS.beepEndDuration, beepEndDuration);
-    saveCloudSettings({ semester: sem, academicYear: ay, attendanceTime, beepStartDuration, beepHalfDuration, beepFifteenDuration, beepEndDuration });
-    setTitles();
-    alert("تم حفظ الإعدادات بنجاح.");
+    localStorage.setItem(STORE_KEYS.beepStartEnabled, String(beepStartEnabled));
+    localStorage.setItem(STORE_KEYS.beepHalfEnabled, String(beepHalfEnabled));
+    localStorage.setItem(STORE_KEYS.beepFifteenEnabled, String(beepFifteenEnabled));
+    localStorage.setItem(STORE_KEYS.beepEndEnabled, String(beepEndEnabled));
+    saveCloudSettings({ beepStartDuration, beepHalfDuration, beepFifteenDuration, beepEndDuration, beepStartEnabled, beepHalfEnabled, beepFifteenEnabled, beepEndEnabled });
+    alert("تم حفظ إعدادات التنبيهات الصوتية.");
+  });
+
+  saveAbsenceSettingsBtn?.addEventListener("click", () => {
+    const attendanceTime = attendanceTimeInput ? attendanceTimeInput.value.trim() : "30";
+    if (!attendanceTime || Number(attendanceTime) <= 0) return alert("يرجى إدخال وقت تسجيل الغياب بالدقائق.");
+    if (!requireCloudForSharedSave()) return;
+    localStorage.setItem(STORE_KEYS.attendanceTime, attendanceTime);
+    saveCloudSettings({ attendanceTime });
+    alert("تم حفظ إعدادات الغياب.");
   });
 
   saveSupportCodeBtn?.addEventListener("click", () => {
     const currentSupportCode = supportCurrentCodeInput ? supportCurrentCodeInput.value.trim() : "";
     const newSupportCode = supportNewCodeInput ? supportNewCodeInput.value.trim() : "";
     const confirmSupportCode = supportConfirmCodeInput ? supportConfirmCodeInput.value.trim() : "";
-    const chairName = supportChairNameInput ? supportChairNameInput.value.trim() : "";
-    const chairTitle = supportChairTitleInput ? supportChairTitleInput.value.trim() : "";
     if (!requireCloudForSharedSave()) return;
-
-    const payload = { supportChairName: chairName, supportChairTitle: chairTitle };
-    localStorage.setItem(STORE_KEYS.supportChairName, chairName);
-    localStorage.setItem(STORE_KEYS.supportChairTitle, chairTitle);
-
-    if (currentSupportCode || newSupportCode || confirmSupportCode) {
-      if (currentSupportCode !== getSupportCode()) return alert("رمز دخول لجنة الدعم الحالي غير صحيح.");
-      if (!newSupportCode || newSupportCode.length < 3) return alert("يرجى إدخال رمز جديد من 3 خانات على الأقل.");
-      if (newSupportCode !== confirmSupportCode) return alert("الرمز الجديد وتأكيده غير متطابقين.");
-      localStorage.setItem(STORE_KEYS.supportCode, newSupportCode);
-      payload.supportCode = newSupportCode;
-      [supportCurrentCodeInput, supportNewCodeInput, supportConfirmCodeInput].forEach(el => { if (el) el.value = ""; });
-    }
-
-    saveCloudSettings(payload);
-    alert("تم حفظ إعدادات لجنة الدعم بنجاح.");
+    if (currentSupportCode !== getSupportCode()) return alert("رمز دخول لجنة الدعم الحالي غير صحيح.");
+    if (!newSupportCode || newSupportCode.length < 3) return alert("يرجى إدخال رمز جديد من 3 خانات على الأقل.");
+    if (newSupportCode !== confirmSupportCode) return alert("الرمز الجديد وتأكيده غير متطابقين.");
+    localStorage.setItem(STORE_KEYS.supportCode, newSupportCode);
+    saveCloudSettings({ supportCode: newSupportCode });
+    [supportCurrentCodeInput, supportNewCodeInput, supportConfirmCodeInput].forEach(el => { if (el) el.value = ""; });
+    alert("تم تغيير رمز دخول لجنة الدعم بنجاح.");
   });
+}
 
-  document.getElementById("saveAlertSettingsBtn")?.addEventListener("click", () => saveBtn.click());
-  document.getElementById("saveAbsenceSettingsBtn")?.addEventListener("click", () => saveBtn.click());
-  document.getElementById("analyzeStudentCountsBtn")?.addEventListener("click", () => {
-    alert("تم تجهيز واجهة مراجعة أعداد الطلبة. تحتاج هذه الخاصية إلى تفعيل محلل PDF في نسخة لاحقة.");
-  });
-  document.getElementById("applySelectedStudentCountsBtn")?.addEventListener("click", () => {
-    alert("لا توجد نتائج محددة للاعتماد بعد. يرجى تحليل ملف قوائم الشعب أولًا.");
-  });
+
+function initSettingsSidebar(){
+  const buttons = [...document.querySelectorAll('[data-settings-section-target]')];
+  const sections = [...document.querySelectorAll('[data-settings-section]')];
+  if (!buttons.length || !sections.length) return;
+  function showSection(name){
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.settingsSectionTarget === name));
+    sections.forEach(s => s.classList.toggle('active', s.dataset.settingsSection === name));
+    if (name === 'absence') updateAdminAbsenceStats();
+    if (name === 'system') updateStats();
+  }
+  buttons.forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.settingsSectionTarget)));
+  showSection(buttons.find(b=>b.classList.contains('active'))?.dataset.settingsSectionTarget || 'system');
+  ['absenceStatsScopeSelect','absenceStatsDaySelect','absenceStatsWeekSelect','absenceStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', updateAdminAbsenceStats));
+  ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { updateStats(); updateStatsScopeControls(); }));
+}
+function updateStatsScopeControls(){
+  const scope = document.getElementById('adminStatsScopeSelect')?.value || 'all';
+  ['Day','Week','Period'].forEach(k => document.getElementById('adminStats'+k+'Wrap')?.classList.toggle('hidden', scope !== k.toLowerCase()));
+}
+function updateAdminAbsenceStats(){
+  const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'all';
+  ['Day','Week','Period'].forEach(k => document.getElementById('absenceStats'+k+'Wrap')?.classList.toggle('hidden', scope !== k.toLowerCase()));
+  const reqs = (supportAbsenceRequestsCache || getAbsenceRequestsForToday() || []).filter(r => r.kind === 'absence');
+  const totalAbs = reqs.reduce((s,r)=>s+(Number(r.absenceCount)||0),0);
+  const totalStudents = sumStudents(getStoredExams());
+  const rate = totalStudents ? ((totalAbs/totalStudents)*100).toFixed(2) : '0.00';
+  const summary = document.getElementById('absenceStatsSummary');
+  if (summary) summary.innerHTML = `<div><strong>${toArabicDigits(totalAbs)}</strong><span>إجمالي الغياب</span></div><div><strong>${toArabicDigits(rate)}%</strong><span>نسبة الغياب</span></div>`;
+  const details = document.getElementById('absenceStatsDetails');
+  if (details) {
+    const rows = reqs.map(r => `<tr><td>${escapeHtml(r.courseName||'')}</td><td>${escapeHtml(r.courseCode||'')}</td><td>${escapeHtml(r.sectionLabel||getSectionTypeLabel(r.section||''))}</td><td>${escapeHtml(r.periodText||'')}</td><td>${escapeHtml(r.hall||'')}</td><td>${toArabicDigits(Number(r.absenceCount)||0)}</td></tr>`).join('');
+    details.innerHTML = `<table class="support-hall-table"><thead><tr><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>الفترة</th><th>القاعة</th><th>الغياب</th></tr></thead><tbody>${rows || '<tr><td colspan="6">لا توجد بيانات غياب</td></tr>'}</tbody></table>`;
+  }
 }
 
 function getReportSelectedSections(){
@@ -2221,6 +2289,7 @@ function initAdmin(){
   initTermSettings();
   initReportTools();
   initHallLockAdmin();
+  initSettingsSidebar();
   const login = document.getElementById("loginPanel"); const settings = document.getElementById("settingsPanel");
   document.getElementById("loginBtn")?.addEventListener("click", async () => {
     try {
@@ -2249,9 +2318,9 @@ function initAdmin(){
   });
   updateDataFileInfo();
   setCloudStatus(cloudStatusText);
-  document.getElementById("adminSettingsLoginBtn")?.addEventListener("click", () => {
-    adminLogout();
-    location.hash = "admin";
+  document.getElementById("adminOpenSupportBtn")?.addEventListener("click", () => {
+    sessionStorage.setItem("finalExamTimer.supportLoggedIn", "true");
+    location.hash = "support";
   });
   document.getElementById("excelFile")?.addEventListener("change", handleExcelUpload);
   document.getElementById("replaceDataBtn")?.addEventListener("click", replaceCurrentData);
@@ -2333,7 +2402,7 @@ function renderAdminsListFromDocs(docs){
     const isPrimary = a.email === PRIMARY_ADMIN_EMAIL;
     return `<div class="admin-user-row">
       <div><strong>${escapeHtml(a.email)}</strong>${isPrimary ? '<span>👑 مالك النظام</span>' : '<span>أدمن</span>'}</div>
-      ${isPrimary ? '<em class="owner-lock-note">لا يمكن حذف مالك النظام</em>' : `<button type="button" class="danger-btn" data-remove-admin="${escapeHtml(a.email)}">حذف</button>`}
+      ${isPrimary ? '<em>لا يمكن حذفه</em>' : `<button type="button" class="danger-btn" data-remove-admin="${escapeHtml(a.email)}">حذف</button>`}
     </div>`;
   }).join("");
   box.querySelectorAll("[data-remove-admin]").forEach(btn => {
