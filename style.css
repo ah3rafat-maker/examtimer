@@ -1939,3 +1939,16 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
 }
 .student-count-diff-table .diff-strong td{background:#FFF1F1!important;}
 .student-count-diff-table .diff-soft td{background:#FFF9E8!important;}
+
+
+/* V74 refinements */
+#adminOpenSupportBtn.hidden{display:none!important;}
+.settings-card .primary-btn,.settings-card .secondary-btn,.settings-card .danger-btn{height:38px!important;min-height:38px!important;padding:0 14px!important;border-radius:11px!important;font-size:14px!important;line-height:1!important;min-width:auto!important;}
+.settings-card .actions-row{justify-content:flex-start!important;direction:ltr!important;align-items:center!important;gap:8px!important;}
+.settings-card > .primary-btn,.settings-card > .secondary-btn,.settings-card > .danger-btn{margin-left:0!important;margin-right:auto!important;}
+.student-count-diff-table input[type="checkbox"]{width:16px!important;height:16px!important;min-width:16px!important;min-height:16px!important;padding:0!important;margin:0!important;accent-color:#0B2E6B;}
+.absence-report-table{font-size:13px!important;}
+.absence-report-table th,.absence-report-table td{padding:6px 8px!important;line-height:1.3!important;vertical-align:middle!important;}
+.absence-report-table tbody tr{min-height:auto!important;}
+.admin-user-row em{font-style:normal;color:#526070;font-weight:700;}
+@media print{.absence-report-table th,.absence-report-table td{padding:5px 6px!important;line-height:1.25!important;}}

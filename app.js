@@ -168,6 +168,10 @@ function hallLocksCollection(){
 function isSupportLoggedIn(){
   return sessionStorage.getItem("finalExamTimer.supportLoggedIn") === "true";
 }
+function setAdminSupportButtonVisible(visible){
+  const btn = document.getElementById("adminOpenSupportBtn");
+  if (btn) btn.classList.toggle("hidden", !visible);
+}
 async function ensurePrimaryAdminDoc(){
   if (!cloudDb) return false;
   return true;
@@ -1136,6 +1140,44 @@ function normalizePeriodFilterText(value){
     .replace(/\s+/g, " ")
     .trim();
 }
+function getRequestPeriodCandidates(r){
+  const candidates = [];
+  if (r && r.periodText) candidates.push(r.periodText);
+  if (r && r.examKey) {
+    const parts = String(r.examKey).split('|');
+    if (parts[1]) candidates.push(parts[1]);
+  }
+  if (r && r.periodRaw) candidates.push(r.periodRaw);
+  return candidates.filter(Boolean);
+}
+function periodMatchesFilter(requestObj, filterValue){
+  if (!filterValue) return true;
+  const target = normalizePeriodFilterText(filterValue);
+  const targetParsed = parsePeriod(target);
+  return getRequestPeriodCandidates(requestObj).some(p => {
+    const norm = normalizePeriodFilterText(p);
+    if (norm === target) return true;
+    const parsed = parsePeriod(norm);
+    return parsed && targetParsed && parsed.startMinutes === targetParsed.startMinutes && parsed.endMinutes === targetParsed.endMinutes;
+  });
+}
+function findExamForAbsenceRequest(r){
+  const exams = getAllNormalizedExams();
+  if (!r) return null;
+  if (r.examKey) {
+    const hit = exams.find(e => makeExamKey(e) === r.examKey);
+    if (hit) return hit;
+  }
+  const reqSec = clean(r.section || '').replace(/\D/g,'') || clean(r.section || '');
+  return exams.find(e => {
+    const sec = clean(e.section || '').replace(/\D/g,'') || clean(e.section || '');
+    return (!r.courseCode || clean(e.courseCode).toUpperCase() === clean(r.courseCode).toUpperCase()) &&
+      (!r.hall || clean(e.hall) === clean(r.hall)) &&
+      (!r.examDate || clean(e.date) === normalizeDate(r.examDate)) &&
+      (!reqSec || sec === reqSec);
+  }) || null;
+}
+
 function getTodayExamsForSupport(){
   refreshAllExams();
   const now = new Date();
@@ -1891,6 +1933,7 @@ function adminLogout(){
   const settings = document.getElementById("settingsPanel");
   if (login) login.classList.remove("hidden");
   if (settings) settings.classList.add("hidden");
+  setAdminSupportButtonVisible(false);
   const pw = document.getElementById("passwordInput");
   if (pw) pw.value = "";
   clearAdminInactivityTimers();
@@ -2263,7 +2306,7 @@ function filterRequestsByAdminScope(reqs, scopePrefix){
       const w = weeks.find(x => x.value === week);
       if (w && !(dateSource >= w.start && dateSource <= w.end)) return false;
     }
-    if (period && normalizePeriodFilterText(r.periodText || "") !== normalizePeriodFilterText(period)) return false;
+    if (period && !periodMatchesFilter(r, period)) return false;
     return true;
   });
 }
@@ -2343,13 +2386,38 @@ async function updateAdminAbsenceStats(){
   const details = document.getElementById('absenceStatsDetails');
   if (details) {
     const rows = reqs.map(r => {
+      const ex = findExamForAbsenceRequest(r);
       const registeredAt = r.createdAtMs ? new Intl.DateTimeFormat("ar-OM-u-nu-latn-ca-gregory", {dateStyle:"short", timeStyle:"short"}).format(new Date(r.createdAtMs)) : "";
-      return `<tr><td>${escapeHtml(r.courseName||'')}</td><td>${escapeHtml(r.courseCode||'')}</td><td>${escapeHtml(r.sectionLabel||getSectionTypeLabel(r.section||''))}</td><td>${escapeHtml(toArabicDigits(r.examDate||''))}</td><td>${escapeHtml(r.periodText||'')}</td><td>${escapeHtml(r.hall||'')}</td><td>${toArabicDigits(Number(r.absenceCount)||0)}</td><td>${escapeHtml(toArabicDigits(registeredAt))}</td></tr>`;
+      const examDate = r.examDate || (ex && ex.date) || "";
+      const periodText = r.periodText || (ex && periodKeyForExam(ex)) || "";
+      const hall = r.hall || (ex && ex.hall) || "";
+      const courseName = r.courseName || (ex && ex.courseName) || "";
+      const courseCode = r.courseCode || (ex && ex.courseCode) || "";
+      const section = r.sectionLabel || getSectionTypeLabel(r.section || (ex && ex.section) || "");
+      return `<tr><td>${escapeHtml(courseName)}</td><td>${escapeHtml(courseCode)}</td><td>${escapeHtml(section)}</td><td>${escapeHtml(toArabicDigits(examDate))}</td><td>${escapeHtml(periodText)}</td><td>${escapeHtml(hall)}</td><td>${toArabicDigits(Number(r.absenceCount)||0)}</td><td>${escapeHtml(toArabicDigits(registeredAt))}</td></tr>`;
     }).join('');
     details.innerHTML = `<table class="support-hall-table absence-report-table"><thead><tr><th>اسم المقرر</th><th>الكود</th><th>الشعبة</th><th>تاريخ الامتحان</th><th>الفترة الامتحانية</th><th>القاعة</th><th>عدد الغياب</th><th>توقيت التسجيل</th></tr></thead><tbody>${rows || '<tr><td colspan="8">لا توجد بيانات غياب</td></tr>'}</tbody></table>`;
   }
 }
-function printAbsenceStatsReport(){ updateAdminAbsenceStats().then(() => window.print()); }
+async function printAbsenceStatsReport(){
+  await updateAdminAbsenceStats();
+  const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'all';
+  const titlePart = scope === 'day' ? `ليوم ${document.getElementById('absenceStatsDaySelect')?.selectedOptions?.[0]?.textContent || ''}` : scope === 'week' ? `${document.getElementById('absenceStatsWeekSelect')?.selectedOptions?.[0]?.textContent || ''}` : 'شامل';
+  const summaryHtml = document.getElementById('absenceStatsSummary')?.innerHTML || '';
+  const tableHtml = document.getElementById('absenceStatsDetails')?.innerHTML || '<p>لا توجد بيانات.</p>';
+  const w = window.open('', '_blank');
+  if (!w) { window.print(); return; }
+  w.document.open();
+  w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>إحصائية الغياب</title><style>
+    @page{size:A4;margin:14mm 12mm;} body{font-family:Arial,'Tahoma',sans-serif;color:#0B2E6B;background:#fff;margin:0;}
+    .report-header{display:grid;grid-template-columns:130px 1fr;align-items:center;border-bottom:2px solid #E7771A;padding-bottom:10px;margin-bottom:14px;break-inside:avoid;}
+    .report-header img{width:120px;height:auto;justify-self:start}.report-title{text-align:center}.report-title h1{margin:0;font-size:22px}.report-title h2{margin:6px 0 0;font-size:16px;color:#333}
+    .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 14px;break-inside:avoid}.summary>div{border:1px solid #DDE6F2;border-radius:10px;padding:8px;text-align:center;background:#F7FAFE}.summary strong{display:block;font-size:18px}.summary span{font-size:12px;color:#526070}
+    table{width:100%;border-collapse:collapse;font-size:11px;page-break-inside:auto}thead{display:table-header-group}tr{page-break-inside:avoid;page-break-after:auto}th{background:#FFF3E7;color:#0B2E6B;border:1px solid #D9E2EF;padding:6px}td{border:1px solid #D9E2EF;padding:5px;color:#111;line-height:1.35}.support-hall-table-wrap{overflow:visible!important;border:0!important}.soft-note{display:none}
+  </style></head><body><div class="report-header"><img src="assets/logo.png"><div class="report-title"><h1>إحصائية الغياب</h1><h2>${titlePart}</h2></div></div><div class="summary">${summaryHtml}</div>${tableHtml}</body></html>`);
+  w.document.close();
+  setTimeout(()=>{ w.focus(); w.print(); }, 500);
+}
 
 let pendingStudentCountDiffs = [];
 function studentCountKey(code, section){
@@ -2374,12 +2442,29 @@ function extractSectionFromText(text){
   return '';
 }
 function looksLikeStudentRow(cells){
-  return (cells || []).some(c => /^\d{6,12}$/.test(clean(c)));
+  const joined = (cells || []).map(clean).join(' ');
+  if (looksLikeCourseHeader(joined)) return false;
+  return (cells || []).some(c => {
+    const v = clean(c).replace(/\s+/g,'');
+    return /^\d{7,12}$/.test(v) || /^\d{3,6}[A-Z]\d{2,6}$/i.test(v) || /^\d{4,}[A-Z]?\d{2,}$/.test(v);
+  }) || /\b\d{3,6}[A-Z]\d{2,6}\b/i.test(joined);
 }
+function cleanCourseNameFromStudentHeader(raw, code){
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  if (code) s = s.replace(new RegExp(code + '\\s*-?\\s*\\d*', 'i'), '');
+  s = s.replace(/Course\s*Name\s*[:\-]?/ig, '').replace(/اسم\s*المقرر\s*[:\-]?/ig, '');
+  s = s.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
+  return s;
+}
+function looksLikeCourseHeader(text){
+  return /Course\s*Name|Course\s*Department|Section\s*No|Lecturer\s*Name|No\s*Of\s*Student|اسم\s*المقرر|الشعبة/i.test(String(text||''));
+}
+
 function summarizeStudentCountsFromFlatRows(rows){
   const map = new Map();
   let currentCode = '', currentName = '', currentSection = '';
-  const exclusion = (document.getElementById('studentExclusionCodes')?.value || 'W,FW')
+  const exclusion = (document.getElementById('studentExclusionCodes')?.value || 'W,FW,Withdraw,WD')
     .split(',').map(x=>normalizeStudentStatus(x)).filter(Boolean);
   (rows || []).forEach(row => {
     const cells = (Array.isArray(row) ? row : [row]).map(x => clean(x)).filter(x => x !== '');
@@ -2390,10 +2475,11 @@ function summarizeStudentCountsFromFlatRows(rows){
     const sec = extractSectionFromText(joined);
     if (sec) currentSection = sec;
     const nameMatch = joined.match(/(?:Course\s*Name|Course\s*Title|اسم\s*المقرر)\s*[:\-]?\s*(.+)$/i);
-    if (nameMatch) currentName = nameMatch[1].trim();
+    if (nameMatch) currentName = cleanCourseNameFromStudentHeader(nameMatch[1], currentCode);
     // Sometimes the course name is a standalone line immediately after the course code.
-    if (currentCode && !looksLikeStudentRow(cells) && !/SECTION|SEC\.?|الشعبة|Student|ID|Name|Remarks/i.test(joined) && joined.length > 4 && !extractCourseCodeFromText(joined)) {
-      if (!currentName || currentName.length < 3) currentName = joined;
+    if (currentCode && !looksLikeStudentRow(cells) && !/SECTION|SEC\.?|الشعبة|Student|ID|Name|Remarks|Signature|Department|Lecturer|No\s*Of\s*Student/i.test(joined) && joined.length > 4 && !extractCourseCodeFromText(joined)) {
+      const cleanedName = cleanCourseNameFromStudentHeader(joined, currentCode);
+      if (cleanedName && (!currentName || currentName.length < 3)) currentName = cleanedName;
     }
     if (currentCode && currentSection && looksLikeStudentRow(cells)) {
       const statuses = cells.map(normalizeStudentStatus).filter(Boolean);
@@ -2456,7 +2542,15 @@ async function analyzeStudentCountsFile(){
     });
     pendingStudentCountDiffs = counts.map(c => {
       const hit = examMap.get(studentCountKey(c.courseCode, c.section));
-      return { ...c, current: hit ? Number(hit.exam.students)||0 : null, rowIndex: hit ? hit.index : -1, diff: hit ? c.actual - (Number(hit.exam.students)||0) : null, selected: !!(hit && c.actual !== (Number(hit.exam.students)||0)) };
+      const current = hit ? Number(hit.exam.students)||0 : null;
+      return { ...c,
+        courseName: hit ? hit.exam.courseName : c.courseName,
+        sectionLabel: hit ? getSectionTypeLabel(hit.exam.section) : getSectionTypeLabel(c.section),
+        current,
+        rowIndex: hit ? hit.index : -1,
+        diff: hit ? c.actual - current : null,
+        selected: !!(hit && c.actual !== current)
+      };
     }).filter(x => x.current !== null && x.diff !== 0);
     const unmatched = counts.filter(c => !examMap.has(studentCountKey(c.courseCode, c.section))).length;
     if (summary) summary.textContent = `تم تحليل ${toArabicDigits(counts.length)} شعبة. توجد ${toArabicDigits(pendingStudentCountDiffs.length)} شعبة بها اختلاف في الأعداد. غير المطابق مع ملف الامتحانات: ${toArabicDigits(unmatched)}.`;
@@ -2626,6 +2720,7 @@ function initAdmin(){
   initReportTools();
   initHallLockAdmin();
   initSettingsSidebar();
+  setAdminSupportButtonVisible(false);
   const login = document.getElementById("loginPanel"); const settings = document.getElementById("settingsPanel");
   document.getElementById("loginBtn")?.addEventListener("click", async () => {
     try {
@@ -2642,7 +2737,7 @@ function initAdmin(){
         adminAuthorized = true;
         adminUserEmail = normalizeEmail(user.email);
         sessionStorage.setItem("finalExamTimer.adminLoggedIn","true");
-        login.classList.add("hidden"); settings.classList.remove("hidden");
+        login.classList.add("hidden"); settings.classList.remove("hidden"); setAdminSupportButtonVisible(true);
         updateStats(); resetAdminInactivity(); loadAdminsList();
       } else {
         alert("Firebase Authentication غير مفعّل. يرجى تفعيل Google Sign-in في Firebase.");
@@ -2738,7 +2833,7 @@ function renderAdminsListFromDocs(docs){
   box.innerHTML = admins.map(a => {
     const isPrimary = a.email === PRIMARY_ADMIN_EMAIL;
     return `<div class="admin-user-row">
-      <div><strong>${escapeHtml(a.email)}</strong>${isPrimary ? '<span>👑 مالك النظام</span>' : '<span>أدمن</span>'}</div>
+      <div><strong>${escapeHtml(a.email)}</strong>${isPrimary ? '<span>مالك النظام</span>' : '<span>أدمن</span>'}</div>
       ${isPrimary ? '<em>لا يمكن حذفه</em>' : `<button type="button" class="danger-btn" data-remove-admin="${escapeHtml(a.email)}">حذف</button>`}
     </div>`;
   }).join("");
@@ -2788,6 +2883,8 @@ async function removeAdminEmail(email){
   try {
     await adminDoc(email).delete();
     logAdminOperation("حذف أدمن", email);
+    alert("تم حذف الأدمن بنجاح.");
+    loadAdminsList();
   } catch (err) {
     console.error(err);
     alert("تعذر حذف الأدمن. تحقق من قواعد Firestore.");
@@ -2888,6 +2985,7 @@ async function saveEditedRows(){
   renderEditRows();
   const savedCount = getStoredExams().length;
   document.getElementById("editStatus").textContent = `تم حفظ التعديلات بنجاح في مصدر البيانات المشترك. عدد السجلات المحفوظة: ${toArabicDigits(savedCount)}. افتح صفحة العرض أو حدّثها لرؤية القاعات المطابقة للتاريخ والوقت.`;
+  logAdminOperation("حفظ تعديلات بيانات الامتحانات", `${cards.length} سجل`);
 }
 
 function parseExcelEventFile(file, callback){
@@ -3118,11 +3216,13 @@ function showAppPage(){
     if (sessionStorage.getItem("finalExamTimer.adminLoggedIn") === "true") {
       if (login) login.classList.add("hidden");
       if (settings) settings.classList.remove("hidden");
+      setAdminSupportButtonVisible(true);
       loadAdminsList();
       resetAdminInactivity();
     } else {
       if (login) login.classList.remove("hidden");
       if (settings) settings.classList.add("hidden");
+      setAdminSupportButtonVisible(false);
     }
     populateEditDates();
     updateStats();
