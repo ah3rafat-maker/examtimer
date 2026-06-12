@@ -18,7 +18,8 @@ const STORE_KEYS = {
   beepStartEnabled: "finalExamTimer.beepStartEnabled",
   beepHalfEnabled: "finalExamTimer.beepHalfEnabled",
   beepFifteenEnabled: "finalExamTimer.beepFifteenEnabled",
-  beepEndEnabled: "finalExamTimer.beepEndEnabled"
+  beepEndEnabled: "finalExamTimer.beepEndEnabled",
+  timerPosition: "finalExamTimer.timerPosition"
 };
 
 const DEFAULT_PASSWORD = "1234";
@@ -326,12 +327,14 @@ function initCloudSync(){
       if (settings.beepHalfDuration) localStorage.setItem(STORE_KEYS.beepHalfDuration, String(settings.beepHalfDuration));
       if (settings.beepFifteenDuration) localStorage.setItem(STORE_KEYS.beepFifteenDuration, String(settings.beepFifteenDuration));
       if (settings.beepEndDuration) localStorage.setItem(STORE_KEYS.beepEndDuration, String(settings.beepEndDuration));
+      if (settings.timerPosition) localStorage.setItem(STORE_KEYS.timerPosition, String(settings.timerPosition));
       ["Start","Half","Fifteen","End"].forEach(k => { const prop = "beep" + k + "Enabled"; const key = STORE_KEYS["beep" + k + "Enabled"]; if (settings[prop] !== undefined && key) localStorage.setItem(key, String(settings[prop])); });
       if (settings.updatedAt) localStorage.setItem("finalExamTimer.exams.updatedAt", String(settings.updatedAt));
       suppressCloudSave = false;
       const cloudRows = parseCloudRowsFromSettings(settings);
       if (cloudRows) applyCloudRows(cloudRows, settings.updatedAt || Date.now());
       setTitles();
+      applyTimerPositionSetting();
       updateDataFileInfo();
       updateStats();
       populateEditDates();
@@ -1267,7 +1270,7 @@ function renderAttendanceModalRows(){
   if (!box) return;
   const rows = activePeriodExams.map(e => `<tr data-exam-key="${escapeHtml(sectionExamKey(e))}">
     <td>${escapeHtml(e.courseName)}</td><td>${escapeHtml(e.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(e.section))}</td>
-    <td><input type="number" min="0" step="1" value="0" data-absence-input="1" /></td>
+    <td><input type="number" min="0" max="${escapeHtml(e.students)}" step="1" value="0" data-absence-input="1" data-max-students="${escapeHtml(e.students)}" /></td>
   </tr>`).join("");
   box.innerHTML = `<table class="attendance-table"><thead><tr><th>اسم المقرر</th><th>كود المقرر</th><th>الشعبة</th><th>عدد الغياب</th></tr></thead><tbody>${rows}</tbody></table>`;
   attendanceSubmitInProgress = false;
@@ -1285,14 +1288,15 @@ async function submitAttendanceReport(){
   const inputs = [...document.querySelectorAll('#attendanceRows tr[data-exam-key]')];
   let total = 0;
   const batch = [];
+  let validationError = "";
   inputs.forEach(tr => {
+    if (validationError) return;
     const examKey = tr.dataset.examKey;
     const e = activePeriodExams.find(x => sectionExamKey(x) === examKey);
     const n = Number(tr.querySelector('[data-absence-input]')?.value || 0) || 0;
     if (e && n > Number(e.students || 0)) {
-      attendanceSubmitInProgress = false;
-      if (btn) btn.disabled = false;
-      throw new Error(`ABSENCE_OVER_LIMIT:${e.courseName}:${e.courseCode}:${e.section}:${e.students}`);
+      validationError = `لا يمكن أن يتجاوز عدد الغياب عدد الطلبة المسجلين بالشعبة (${toArabicDigits(e.students)} طالبًا).`;
+      return;
     }
     if (e && n > 0) {
       total += n;
@@ -1318,6 +1322,11 @@ async function submitAttendanceReport(){
       });
     }
   });
+  if (validationError) {
+    attendanceSubmitInProgress = false;
+    if (btn) btn.disabled = false;
+    return alert(validationError);
+  }
   try {
     for (const req of batch) {
       const docId = `absence_${safeDocId(key)}_${safeDocId(req.examKey)}`;
@@ -1985,6 +1994,7 @@ function initDisplay(){
   initAttendanceModal();
   initEarlyFinishTools();
   setTitles();
+  applyTimerPositionSetting();
   refreshAllExams();
   const season = getDisplayTerm();
   if (!season.active) {
@@ -2017,6 +2027,23 @@ function initDisplay(){
   }, 5000);
 }
 
+
+function getTimerPosition(){
+  return String(localStorage.getItem(STORE_KEYS.timerPosition) || (cloudSettingsCache && cloudSettingsCache.timerPosition) || "bottom") === "top" ? "top" : "bottom";
+}
+function applyTimerPositionSetting(){
+  const pos = getTimerPosition();
+  const examView = document.getElementById("examView");
+  if (examView) {
+    examView.classList.toggle("timer-position-top", pos === "top");
+    examView.classList.toggle("timer-position-bottom", pos !== "top");
+  }
+  const topRadio = document.getElementById("timerPositionTop");
+  const bottomRadio = document.getElementById("timerPositionBottom");
+  if (topRadio) topRadio.checked = pos === "top";
+  if (bottomRadio) bottomRadio.checked = pos !== "top";
+}
+
 function initTermSettings(){
   const semesterSelect = document.getElementById("semesterSelect");
   const academicYearInput = document.getElementById("academicYearInput");
@@ -2031,6 +2058,9 @@ function initTermSettings(){
   const beepFifteenEnabledInput = document.getElementById("beepFifteenEnabledInput");
   const beepEndEnabledInput = document.getElementById("beepEndEnabledInput");
   const saveAlertsBtn = document.getElementById("saveAlertsBtn");
+  const timerPositionTop = document.getElementById("timerPositionTop");
+  const timerPositionBottom = document.getElementById("timerPositionBottom");
+  const saveTimerPositionBtn = document.getElementById("saveTimerPositionBtn");
   const saveAbsenceSettingsBtn = document.getElementById("saveAbsenceSettingsBtn");
   const supportCurrentCodeInput = document.getElementById("supportCurrentCodeInput");
   const supportNewCodeInput = document.getElementById("supportNewCodeInput");
@@ -2052,6 +2082,7 @@ function initTermSettings(){
   if (beepFifteenEnabledInput) beepFifteenEnabledInput.checked = isBeepEnabled("fifteen");
   if (beepEndEnabledInput) beepEndEnabledInput.checked = isBeepEnabled("end");
   [supportCurrentCodeInput, supportNewCodeInput, supportConfirmCodeInput].forEach(el => { if (el) el.value = ""; });
+  applyTimerPositionSetting();
 
   saveBtn.addEventListener("click", () => {
     const sem = semesterSelect.value;
@@ -2063,6 +2094,15 @@ function initTermSettings(){
     saveCloudSettings({ semester: sem, academicYear: ay });
     setTitles();
     alert("تم حفظ إعدادات النظام.");
+  });
+
+  saveTimerPositionBtn?.addEventListener("click", () => {
+    const timerPosition = timerPositionTop?.checked ? "top" : "bottom";
+    if (!requireCloudForSharedSave()) return;
+    localStorage.setItem(STORE_KEYS.timerPosition, timerPosition);
+    saveCloudSettings({ timerPosition });
+    applyTimerPositionSetting();
+    alert("تم حفظ موضع المؤقت.");
   });
 
   saveAlertsBtn?.addEventListener("click", () => {
@@ -2108,43 +2148,138 @@ function initTermSettings(){
     localStorage.setItem(STORE_KEYS.supportCode, newSupportCode);
     saveCloudSettings({ supportCode: newSupportCode });
     [supportCurrentCodeInput, supportNewCodeInput, supportConfirmCodeInput].forEach(el => { if (el) el.value = ""; });
+  applyTimerPositionSetting();
     alert("تم تغيير رمز دخول لجنة الدعم بنجاح.");
   });
 }
 
 
+
+function getAllNormalizedExams(){
+  return getStoredExams().map(normalizeExam).filter(e => e.hall && e.date && e.period);
+}
+function getExamWeekOptions(){
+  const exams = getAllNormalizedExams().sort((a,b)=>getExamStart(a)-getExamStart(b));
+  if (!exams.length) return [];
+  const first = getExamStart(exams[0]);
+  const start = new Date(first);
+  const day = start.getDay(); // 0 Sun, 6 Sat
+  const offsetToSat = day === 6 ? 0 : (day + 1);
+  start.setDate(start.getDate() - offsetToSat);
+  start.setHours(0,0,0,0);
+  const last = getExamStart(exams[exams.length-1]);
+  const weeks = [];
+  let cursor = new Date(start);
+  let idx = 1;
+  while (cursor <= last) {
+    const end = new Date(cursor);
+    end.setDate(cursor.getDate()+6);
+    end.setHours(23,59,59,999);
+    weeks.push({ value:String(idx), label:`الأسبوع ${toArabicDigits(idx)} (${formatShortDateTime(cursor).date} - ${formatShortDateTime(end).date})`, start:new Date(cursor), end });
+    cursor.setDate(cursor.getDate()+7);
+    idx++;
+  }
+  return weeks;
+}
+function fillSelectOptions(select, items, allLabel){
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = (allLabel ? `<option value="">${allLabel}</option>` : "") + items.map(i => `<option value="${escapeHtml(i.value)}">${escapeHtml(i.label)}</option>`).join("");
+  if ([...select.options].some(o => o.value === current)) select.value = current;
+}
+function populateSettingsFilterOptions(){
+  const exams = getAllNormalizedExams();
+  const dates = unique(exams.map(e=>e.date)).sort().map(d => ({ value:d, label:toArabicDigits(d) }));
+  const periods = unique(exams.map(e=>e.periodRaw || `${e.period.startText} - ${e.period.endText}`)).sort().map(p => ({ value:p, label:toArabicDigits(p) }));
+  const weeks = getExamWeekOptions();
+  ["adminStatsDaySelect","absenceStatsDaySelect"].forEach(id => fillSelectOptions(document.getElementById(id), dates, "اختر اليوم"));
+  ["adminStatsPeriodSelect","absenceStatsPeriodSelect"].forEach(id => fillSelectOptions(document.getElementById(id), periods, "كل الفترات"));
+  ["adminStatsWeekSelect","absenceStatsWeekSelect"].forEach(id => fillSelectOptions(document.getElementById(id), weeks, "اختر الأسبوع"));
+}
+function filterRequestsByAdminScope(reqs, scopePrefix){
+  const scope = document.getElementById(scopePrefix+'ScopeSelect')?.value || 'all';
+  const day = document.getElementById(scopePrefix+'DaySelect')?.value || "";
+  const week = document.getElementById(scopePrefix+'WeekSelect')?.value || "";
+  const period = document.getElementById(scopePrefix+'PeriodSelect')?.value || "";
+  const weeks = getExamWeekOptions();
+  return (reqs || []).filter(r => {
+    const d = new Date(Number(r.createdAtMs || r.examEndMs || Date.now()));
+    if (scope === "day" && day && normalizeDate(`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`) !== day) return false;
+    if (scope === "week" && week) {
+      const w = weeks.find(x => x.value === week);
+      if (w && !(d >= w.start && d <= w.end)) return false;
+    }
+    if ((scope === "period" || period) && period && String(r.periodText || "") !== period) return false;
+    return true;
+  });
+}
+async function getAllAbsenceRequestsForAdmin(){
+  if (supportRequestsCollection()) {
+    try {
+      const snap = await supportRequestsCollection().where("kind","==","absence").get();
+      const rows = [];
+      snap.forEach(doc => rows.push({ id:doc.id, ...(doc.data() || {}) }));
+      supportAbsenceRequestsCache = rows;
+      return rows;
+    } catch (err) {
+      console.warn("Could not load absence requests", err);
+    }
+  }
+  return supportAbsenceRequestsCache || [];
+}
+
 function initSettingsSidebar(){
   const buttons = [...document.querySelectorAll('[data-settings-section-target]')];
   const sections = [...document.querySelectorAll('[data-settings-section]')];
   if (!buttons.length || !sections.length) return;
+  populateSettingsFilterOptions();
   function showSection(name){
     buttons.forEach(b => b.classList.toggle('active', b.dataset.settingsSectionTarget === name));
     sections.forEach(s => s.classList.toggle('active', s.dataset.settingsSection === name));
-    if (name === 'absence') updateAdminAbsenceStats();
-    if (name === 'system') updateStats();
+    if (name === 'attendance') updateAdminAbsenceStats();
+    if (name === 'statistics') { populateSettingsFilterOptions(); updateStats(); updateStatsScopeControls(); }
   }
   buttons.forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.settingsSectionTarget)));
-  showSection(buttons.find(b=>b.classList.contains('active'))?.dataset.settingsSectionTarget || 'system');
+  showSection(buttons.find(b=>b.classList.contains('active'))?.dataset.settingsSectionTarget || 'exam-file');
   ['absenceStatsScopeSelect','absenceStatsDaySelect','absenceStatsWeekSelect','absenceStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', updateAdminAbsenceStats));
   ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { updateStats(); updateStatsScopeControls(); }));
+
+  document.getElementById("printAbsenceReportBtn")?.addEventListener("click", () => window.print());
+  document.getElementById("printStatsReportBtn")?.addEventListener("click", () => window.print());
+  document.getElementById("exportBackupBtn")?.addEventListener("click", () => {
+    const payload = { exams:getStoredExams(), settings:{ semester:localStorage.getItem(STORE_KEYS.semester), academicYear:localStorage.getItem(STORE_KEYS.academicYear) }, exportedAt:new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "utastimer-backup.json";
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 500);
+  });
+  document.getElementById("importBackupBtn")?.addEventListener("click", () => alert("سيتم تفعيل الاستيراد الآمن للنسخ الاحتياطية في إصدار لاحق."));
+
 }
 function updateStatsScopeControls(){
   const scope = document.getElementById('adminStatsScopeSelect')?.value || 'all';
   ['Day','Week','Period'].forEach(k => document.getElementById('adminStats'+k+'Wrap')?.classList.toggle('hidden', scope !== k.toLowerCase()));
 }
-function updateAdminAbsenceStats(){
+async function updateAdminAbsenceStats(){
   const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'all';
   ['Day','Week','Period'].forEach(k => document.getElementById('absenceStats'+k+'Wrap')?.classList.toggle('hidden', scope !== k.toLowerCase()));
-  const reqs = (supportAbsenceRequestsCache || getAbsenceRequestsForToday() || []).filter(r => r.kind === 'absence');
+  populateSettingsFilterOptions();
+  const allReqs = await getAllAbsenceRequestsForAdmin();
+  const reqs = filterRequestsByAdminScope(allReqs.filter(r => r.kind === 'absence'), 'absenceStats');
   const totalAbs = reqs.reduce((s,r)=>s+(Number(r.absenceCount)||0),0);
-  const totalStudents = sumStudents(getStoredExams());
+  const totalStudents = sumStudents(getAllNormalizedExams());
   const rate = totalStudents ? ((totalAbs/totalStudents)*100).toFixed(2) : '0.00';
   const summary = document.getElementById('absenceStatsSummary');
   if (summary) summary.innerHTML = `<div><strong>${toArabicDigits(totalAbs)}</strong><span>إجمالي الغياب</span></div><div><strong>${toArabicDigits(rate)}%</strong><span>نسبة الغياب</span></div>`;
   const details = document.getElementById('absenceStatsDetails');
   if (details) {
-    const rows = reqs.map(r => `<tr><td>${escapeHtml(r.courseName||'')}</td><td>${escapeHtml(r.courseCode||'')}</td><td>${escapeHtml(r.sectionLabel||getSectionTypeLabel(r.section||''))}</td><td>${escapeHtml(r.periodText||'')}</td><td>${escapeHtml(r.hall||'')}</td><td>${toArabicDigits(Number(r.absenceCount)||0)}</td></tr>`).join('');
-    details.innerHTML = `<table class="support-hall-table"><thead><tr><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>الفترة</th><th>القاعة</th><th>الغياب</th></tr></thead><tbody>${rows || '<tr><td colspan="6">لا توجد بيانات غياب</td></tr>'}</tbody></table>`;
+    const rows = reqs.map(r => {
+      const registeredAt = r.createdAtMs ? new Intl.DateTimeFormat("ar-OM-u-nu-latn-ca-gregory", {dateStyle:"short", timeStyle:"short"}).format(new Date(r.createdAtMs)) : "";
+      return `<tr><td>${escapeHtml(r.courseName||'')}</td><td>${escapeHtml(r.courseCode||'')}</td><td>${escapeHtml(r.sectionLabel||getSectionTypeLabel(r.section||''))}</td><td>${escapeHtml(r.examDate||'')}</td><td>${escapeHtml(r.periodText||'')}</td><td>${escapeHtml(r.hall||'')}</td><td>${toArabicDigits(Number(r.absenceCount)||0)}</td><td>${escapeHtml(toArabicDigits(registeredAt))}</td></tr>`;
+    }).join('');
+    details.innerHTML = `<table class="support-hall-table"><thead><tr><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>تاريخ الاختبار</th><th>الفترة</th><th>القاعة</th><th>الغياب</th><th>توقيت التسجيل</th></tr></thead><tbody>${rows || '<tr><td colspan="8">لا توجد بيانات غياب</td></tr>'}</tbody></table>`;
   }
 }
 

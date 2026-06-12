@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>مؤقت الامتحانات النهائية</title>
-  <link rel="stylesheet" href="style.css?v=69" />
+  <link rel="stylesheet" href="style.css?v=70" />
 </head>
 <body class="display-page">
   <main id="displayPage" class="display-shell">
@@ -100,25 +100,25 @@
     </section>
 
     <section id="settingsPanel" class="hidden">
-      <div class="settings-layout">
+      <div class="settings-layout settings-layout-v70">
         <aside class="settings-sidebar" aria-label="أقسام الإعدادات">
-          <button class="settings-nav-btn active" type="button" data-settings-section-target="system">النظام</button>
-          <button class="settings-nav-btn" type="button" data-settings-section-target="admins">الأدمن</button>
-          <button class="settings-nav-btn" type="button" data-settings-section-target="alerts">التنبيهات</button>
-          <button class="settings-nav-btn" type="button" data-settings-section-target="absence">الغياب</button>
-          <button class="settings-nav-btn" type="button" data-settings-section-target="support-settings">لجنة الدعم</button>
-          <button class="settings-nav-btn" type="button" data-settings-section-target="excel">Excel</button>
-          <button class="settings-nav-btn" type="button" data-settings-section-target="hall-locks">القاعات المفتوحة</button>
-          <button class="settings-nav-btn" type="button" data-settings-section-target="exams">الاختبارات</button>
-          <button class="settings-nav-btn" type="button" data-settings-section-target="student-counts">تحديث أعداد الطلبة</button>
+          <button class="settings-nav-btn active" type="button" data-settings-section-target="exam-file">📋 ملف الامتحانات</button>
+          <button class="settings-nav-btn" type="button" data-settings-section-target="timer-alerts">⏱ المؤقت والتنبيهات</button>
+          <button class="settings-nav-btn" type="button" data-settings-section-target="attendance">📝 تسجيل الغياب</button>
+          <button class="settings-nav-btn" type="button" data-settings-section-target="hall-management">🏛 إدارة القاعات</button>
+          <button class="settings-nav-btn" type="button" data-settings-section-target="statistics">📊 الإحصائيات</button>
+          <button class="settings-nav-btn" type="button" data-settings-section-target="archive-log">🗂 السجل والأرشيف</button>
+          <button class="settings-nav-btn" type="button" data-settings-section-target="backup">💾 النسخ الاحتياطي</button>
+          <button class="settings-nav-btn" type="button" data-settings-section-target="platform">⚙ إدارة المنصة</button>
         </aside>
 
-        <div class="settings-content">
-          <section class="settings-section active" data-settings-section="system">
+        <div class="settings-content settings-content-v70">
+
+          <section class="settings-section active" data-settings-section="exam-file">
             <section class="admin-card settings-card compact-card">
-              <h2>إعدادات النظام</h2>
+              <h2>الفصل الدراسي والعام الأكاديمي</h2>
               <div class="settings-form-grid two-cols">
-                <label>اختر الفصل الدراسي
+                <label>الفصل الدراسي
                   <select id="semesterSelect">
                     <option value="خريف">خريف</option>
                     <option value="ربيع">ربيع</option>
@@ -129,13 +129,138 @@
                   <input id="academicYearInput" type="text" placeholder="2025 - 2026" />
                 </label>
               </div>
-              <button id="saveTermBtn" class="primary-btn" type="button">حفظ إعدادات النظام</button>
+              <button id="saveTermBtn" class="primary-btn" type="button">حفظ الفصل والعام الأكاديمي</button>
             </section>
 
-            <section class="admin-card stats-card">
-              <h2>ملخص البيانات</h2>
+            <section class="admin-card data-management-card settings-card">
+              <h2>إدارة ملف الامتحانات</h2>
+              <p>يدعم الملف بالأعمدة: رمز المقرر، اسم المقرر، الشعبة، اليوم، التاريخ، الفترة، عدد الطلاب، القاعة.</p>
+              <p class="soft-note cloud-status"></p>
+              <div class="file-info-grid">
+                <div><span>اسم الملف الحالي</span><strong id="currentFileName">غير محدد</strong></div>
+                <div><span>تاريخ آخر تحديث</span><strong id="currentFileUpdated">غير محدد</strong></div>
+              </div>
+              <label class="file-picker-label">اختيار ملف Excel جديد
+                <input id="excelFile" type="file" accept=".xlsx,.xls" />
+              </label>
+              <p id="pendingFileSummary" class="soft-note"></p>
+              <div class="actions-row"><button id="replaceDataBtn" class="primary-btn" type="button">استبدال البيانات الحالية</button></div>
+            </section>
+
+            <section class="admin-card edit-card settings-card">
+              <h2>تعديل بيانات الامتحانات</h2>
+              <p>اختر تاريخ الامتحان ثم القاعة، وبعدها يمكنك تعديل القاعة أو عدد الطلبة أو أي بيانات أخرى في السجلات المعروضة.</p>
+              <div class="edit-filters">
+                <label>تاريخ الامتحان<select id="editDateSelect"><option value="">اختر التاريخ</option></select></label>
+                <label>القاعة<select id="editHallSelect"><option value="">اختر القاعة</option></select></label>
+              </div>
+              <div id="editRows" class="edit-rows"></div>
+              <div class="actions-row"><button id="saveEditsBtn" class="primary-btn" type="button">حفظ التعديلات</button></div>
+              <p id="editStatus" class="soft-note"></p>
+            </section>
+
+            <section class="admin-card manual-exam-card settings-card">
+              <h2>إضافة امتحان مقرر</h2>
+              <p class="soft-note">يُنشئ هذا النموذج سجلًا مطابقًا لبنية ملف Excel المستخدم في بيانات الاختبارات.</p>
+              <div class="manual-exam-grid">
+                <label>رمز المقرر<input id="manualCourseCode" type="text" placeholder="MATH101" /></label>
+                <label>اسم المقرر<input id="manualCourseName" type="text" placeholder="اسم المقرر" /></label>
+                <label>الشعبة<input id="manualSection" type="text" placeholder="12" /></label>
+                <label>اليوم<input id="manualDay" type="text" placeholder="الأحد" /></label>
+                <label>التاريخ<input id="manualDate" type="text" placeholder="2026-06-08" /></label>
+                <label>الفترة<input id="manualPeriod" type="text" placeholder="08:15 - 10:15" /></label>
+                <label>عدد الطلاب<input id="manualStudents" type="number" min="0" step="1" placeholder="30" /></label>
+                <label>القاعة<input id="manualHall" type="text" placeholder="D012" /></label>
+              </div>
+              <div class="actions-row"><button id="addManualExamBtn" class="primary-btn" type="button">إضافة الاختبار</button></div>
+              <p id="manualExamStatus" class="soft-note"></p>
+            </section>
+
+            <section class="admin-card settings-card compact-card">
+              <h2>تحديث أعداد الطلبة</h2>
+              <p class="soft-note">ارفع ملف PDF الصادر من النظام، ثم اعرض الفروقات قبل اعتماد التحديث. سيتم تجميع الصفحات المتعددة للشعبة الواحدة تلقائيًا عند التحليل.</p>
+              <div class="settings-form-grid two-cols">
+                <label class="file-picker-label">اختيار ملف PDF لقوائم الشعب
+                  <input id="studentCountsPdfFile" type="file" accept=".pdf" />
+                </label>
+                <label>رموز الاستبعاد
+                  <input id="studentExclusionCodes" type="text" value="W, FW" />
+                </label>
+              </div>
+              <div class="actions-row"><button id="analyzeStudentCountsBtn" class="primary-btn" type="button">تحليل ومقارنة الأعداد</button><button id="applySelectedStudentCountsBtn" class="secondary-btn" type="button">اعتماد تحديث المحدد فقط</button></div>
+              <div id="studentCountsDiffSummary" class="soft-note">سيتم عرض الفروقات هنا بعد تحليل الملف.</div>
+              <div id="studentCountsDiffTable" class="support-hall-table-wrap"></div>
+            </section>
+          </section>
+
+          <section class="settings-section" data-settings-section="timer-alerts">
+            <section class="admin-card settings-card compact-card">
+              <h2>موضع المؤقت</h2>
+              <p class="soft-note">اختر ترتيب عناصر شاشة القاعة. الوضع الأسفل هو الوضع الحالي، أما الوضع الأعلى فيضع المؤقت أسفل بيانات القاعة مباشرة.</p>
+              <div class="timer-position-grid">
+                <label class="radio-card"><input type="radio" name="timerPosition" id="timerPositionBottom" value="bottom" checked /><span>أسفل</span><small>بيانات المقررات ثم المؤقت في الأسفل</small></label>
+                <label class="radio-card"><input type="radio" name="timerPosition" id="timerPositionTop" value="top" /><span>أعلى</span><small>القاعة والطلبة والغياب ثم المؤقت ثم بيانات المقررات</small></label>
+              </div>
+              <button id="saveTimerPositionBtn" class="primary-btn" type="button">حفظ موضع المؤقت</button>
+            </section>
+
+            <section class="admin-card settings-card compact-card">
+              <h2>إعدادات التنبيهات الصوتية</h2>
+              <div class="alert-settings-table">
+                <div class="alert-setting-row"><span>تنبيه بداية الاختبار</span><label class="switch-line"><input id="beepStartEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepStartDurationInput" type="number" min="1" step="1" placeholder="3" /></div>
+                <div class="alert-setting-row"><span>تنبيه منتصف وقت الاختبار</span><label class="switch-line"><input id="beepHalfEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepHalfDurationInput" type="number" min="1" step="1" placeholder="3" /></div>
+                <div class="alert-setting-row"><span>تنبيه قبل النهاية بـ 15 دقيقة</span><label class="switch-line"><input id="beepFifteenEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepFifteenDurationInput" type="number" min="1" step="1" placeholder="1" /></div>
+                <div class="alert-setting-row"><span>تنبيه نهاية الاختبار</span><label class="switch-line"><input id="beepEndEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepEndDurationInput" type="number" min="1" step="1" placeholder="10" /></div>
+              </div>
+              <button id="saveAlertsBtn" class="primary-btn" type="button">حفظ إعدادات التنبيهات</button>
+            </section>
+          </section>
+
+          <section class="settings-section" data-settings-section="attendance">
+            <section class="admin-card settings-card compact-card">
+              <h2>إعدادات تسجيل الغياب</h2>
+              <label>وقت تسجيل الغياب بعد بداية الاختبار (بالدقائق)
+                <input id="attendanceTimeInput" type="number" min="1" step="1" placeholder="30" />
+              </label>
+              <button id="saveAbsenceSettingsBtn" class="primary-btn" type="button">حفظ إعدادات الغياب</button>
+            </section>
+
+            <section class="admin-card settings-card compact-card">
+              <h2>إحصائية الغياب</h2>
+              <p class="soft-note">يمكن عرض الإحصائية يوميًا، أسبوعيًا أو بشكل شامل، مع إمكانية تحديد فترة امتحانية معينة.</p>
               <div class="stats-filter-row">
-                <label>نطاق الملخص
+                <label>نطاق الإحصائية
+                  <select id="absenceStatsScopeSelect">
+                    <option value="all">شامل فترة الامتحانات</option>
+                    <option value="day">يوم محدد</option>
+                    <option value="week">أسبوع محدد</option>
+                    <option value="period">فترة محددة</option>
+                  </select>
+                </label>
+                <label id="absenceStatsDayWrap" class="hidden">اليوم<select id="absenceStatsDaySelect"></select></label>
+                <label id="absenceStatsWeekWrap" class="hidden">الأسبوع<select id="absenceStatsWeekSelect"></select></label>
+                <label id="absenceStatsPeriodWrap" class="hidden">الفترة<select id="absenceStatsPeriodSelect"></select></label>
+              </div>
+              <div id="absenceStatsSummary" class="absence-stats-summary"></div>
+              <div id="absenceStatsDetails" class="support-hall-table-wrap"></div>
+              <div class="actions-row"><button id="printAbsenceReportBtn" class="secondary-btn" type="button">طباعة تقرير الغياب PDF</button></div>
+            </section>
+          </section>
+
+          <section class="settings-section" data-settings-section="hall-management">
+            <section class="admin-card hall-locks-card settings-card">
+              <h2>إدارة القاعات المفتوحة</h2>
+              <p class="soft-note">يمكن تحرير القاعة إذا بقيت مفتوحة على جهاز آخر بسبب إغلاق المتصفح أو انقطاع الاتصال.</p>
+              <div id="hallLocksList" class="hall-locks-list"></div>
+              <div class="actions-row"><button id="releaseAllHallLocksBtn" class="danger-btn" type="button">تحرير جميع القاعات</button></div>
+            </section>
+          </section>
+
+          <section class="settings-section" data-settings-section="statistics">
+            <section class="admin-card stats-card settings-card">
+              <h2>الإحصائيات</h2>
+              <div class="stats-filter-row">
+                <label>نطاق الإحصائية
                   <select id="adminStatsScopeSelect">
                     <option value="all">شامل</option>
                     <option value="day">يوم محدد</option>
@@ -184,14 +309,35 @@
               </div>
               <div class="stats-section-title">القاعات المستخدمة اليوم</div>
               <div id="todayHallStudents" class="hall-students-stats"></div>
+              <div class="actions-row"><button id="printStatsReportBtn" class="secondary-btn" type="button">طباعة تقرير الإحصائيات PDF</button></div>
               <p id="adminStatus" class="soft-note"></p>
             </section>
           </section>
 
-          <section class="settings-section" data-settings-section="admins">
+          <section class="settings-section" data-settings-section="archive-log">
+            <section class="admin-card settings-card compact-card">
+              <h2>السجل والأرشيف</h2>
+              <p class="soft-note">يعرض هذا القسم سجل العمليات وأرشيف الفصول السابقة. سيتم تفعيله تدريجيًا في النسخ القادمة.</p>
+              <div class="placeholder-panel">سجل العمليات وأرشيف الفصول السابقة</div>
+            </section>
+          </section>
+
+          <section class="settings-section" data-settings-section="backup">
+            <section class="admin-card settings-card compact-card">
+              <h2>النسخ الاحتياطي</h2>
+              <p class="soft-note">يمكن لاحقًا تصدير واستيراد قاعدة بيانات الامتحانات والإعدادات.</p>
+              <div class="actions-row">
+                <button id="exportBackupBtn" class="secondary-btn" type="button">تصدير البيانات</button>
+                <button id="importBackupBtn" class="secondary-btn" type="button">استيراد البيانات</button>
+              </div>
+              <div class="placeholder-panel">ميزة النسخ الاحتياطي جاهزة للتوسع.</div>
+            </section>
+          </section>
+
+          <section class="settings-section" data-settings-section="platform">
             <section class="admin-card settings-card compact-card">
               <h2>إدارة الأدمن</h2>
-              <p class="soft-note">يُسمح فقط لحسابات Google الموجودة في هذه القائمة بالدخول إلى الإعدادات.</p>
+              <p class="soft-note">يُسمح فقط لحسابات Google الموجودة في هذه القائمة بالدخول إلى الإعدادات. مالك النظام غير قابل للحذف.</p>
               <div class="settings-form-grid two-cols align-end">
                 <label>إضافة أدمن جديد
                   <input id="newAdminEmail" type="email" placeholder="example@gmail.com" />
@@ -200,48 +346,7 @@
               </div>
               <div id="adminsList" class="admins-list"></div>
             </section>
-          </section>
 
-          <section class="settings-section" data-settings-section="alerts">
-            <section class="admin-card settings-card compact-card">
-              <h2>إعدادات التنبيهات الصوتية</h2>
-              <div class="alert-settings-table">
-                <div class="alert-setting-row"><span>تنبيه بداية الاختبار</span><label class="switch-line"><input id="beepStartEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepStartDurationInput" type="number" min="1" step="1" placeholder="3" /></div>
-                <div class="alert-setting-row"><span>تنبيه منتصف وقت الاختبار</span><label class="switch-line"><input id="beepHalfEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepHalfDurationInput" type="number" min="1" step="1" placeholder="3" /></div>
-                <div class="alert-setting-row"><span>تنبيه قبل النهاية بـ 15 دقيقة</span><label class="switch-line"><input id="beepFifteenEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepFifteenDurationInput" type="number" min="1" step="1" placeholder="1" /></div>
-                <div class="alert-setting-row"><span>تنبيه نهاية الاختبار</span><label class="switch-line"><input id="beepEndEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepEndDurationInput" type="number" min="1" step="1" placeholder="10" /></div>
-              </div>
-              <button id="saveAlertsBtn" class="primary-btn" type="button">حفظ إعدادات التنبيهات</button>
-            </section>
-          </section>
-
-          <section class="settings-section" data-settings-section="absence">
-            <section class="admin-card settings-card compact-card">
-              <h2>إعدادات وإحصائية الغياب</h2>
-              <label>وقت تسجيل الغياب بعد بداية الاختبار (بالدقائق)
-                <input id="attendanceTimeInput" type="number" min="1" step="1" placeholder="30" />
-              </label>
-              <button id="saveAbsenceSettingsBtn" class="primary-btn" type="button">حفظ إعدادات الغياب</button>
-              <hr class="soft-divider" />
-              <div class="stats-filter-row">
-                <label>نطاق الإحصائية
-                  <select id="absenceStatsScopeSelect">
-                    <option value="all">شامل فترة الامتحانات</option>
-                    <option value="day">يوم محدد</option>
-                    <option value="week">أسبوع محدد</option>
-                    <option value="period">فترة محددة</option>
-                  </select>
-                </label>
-                <label id="absenceStatsDayWrap" class="hidden">اليوم<select id="absenceStatsDaySelect"></select></label>
-                <label id="absenceStatsWeekWrap" class="hidden">الأسبوع<select id="absenceStatsWeekSelect"></select></label>
-                <label id="absenceStatsPeriodWrap" class="hidden">الفترة<select id="absenceStatsPeriodSelect"></select></label>
-              </div>
-              <div id="absenceStatsSummary" class="absence-stats-summary"></div>
-              <div id="absenceStatsDetails" class="support-hall-table-wrap"></div>
-            </section>
-          </section>
-
-          <section class="settings-section" data-settings-section="support-settings">
             <section class="admin-card settings-card compact-card">
               <h2>لجنة دعم ومراقبة الامتحانات</h2>
               <div class="settings-form-grid three-cols">
@@ -255,81 +360,6 @@
               </div>
               <div class="actions-row"><button id="saveSupportCodeBtn" class="primary-btn" type="button">حفظ رمز لجنة الدعم</button><button id="saveReportSettingsBtn" class="secondary-btn" type="button">حفظ بيانات رئيس اللجنة</button></div>
               <p id="reportStatus" class="soft-note"></p>
-            </section>
-          </section>
-
-          <section class="settings-section" data-settings-section="excel">
-            <section class="admin-card data-management-card settings-card">
-              <h2>إدارة ملف الامتحانات</h2>
-              <p>يدعم الملف بالأعمدة: رمز المقرر، اسم المقرر، الشعبة، اليوم، التاريخ، الفترة، عدد الطلاب، القاعة.</p>
-              <p class="soft-note cloud-status"></p>
-              <div class="file-info-grid">
-                <div><span>اسم الملف الحالي</span><strong id="currentFileName">غير محدد</strong></div>
-                <div><span>تاريخ آخر تحديث</span><strong id="currentFileUpdated">غير محدد</strong></div>
-              </div>
-              <label class="file-picker-label">اختيار ملف Excel جديد
-                <input id="excelFile" type="file" accept=".xlsx,.xls" />
-              </label>
-              <p id="pendingFileSummary" class="soft-note"></p>
-              <div class="actions-row"><button id="replaceDataBtn" class="primary-btn" type="button">استبدال البيانات الحالية</button></div>
-            </section>
-          </section>
-
-          <section class="settings-section" data-settings-section="hall-locks">
-            <section class="admin-card hall-locks-card settings-card">
-              <h2>إدارة القاعات المفتوحة</h2>
-              <p class="soft-note">يمكن تحرير القاعة إذا بقيت مفتوحة على جهاز آخر بسبب إغلاق المتصفح أو انقطاع الاتصال.</p>
-              <div id="hallLocksList" class="hall-locks-list"></div>
-              <div class="actions-row"><button id="releaseAllHallLocksBtn" class="danger-btn" type="button">تحرير جميع القاعات</button></div>
-            </section>
-          </section>
-
-          <section class="settings-section" data-settings-section="exams">
-            <section class="admin-card manual-exam-card settings-card">
-              <h2>إضافة اختبار مقرر يدويًا</h2>
-              <p class="soft-note">يُنشئ هذا النموذج سجلًا مطابقًا لبنية ملف Excel المستخدم في بيانات الاختبارات.</p>
-              <div class="manual-exam-grid">
-                <label>رمز المقرر<input id="manualCourseCode" type="text" placeholder="MATH101" /></label>
-                <label>اسم المقرر<input id="manualCourseName" type="text" placeholder="اسم المقرر" /></label>
-                <label>الشعبة<input id="manualSection" type="text" placeholder="12" /></label>
-                <label>اليوم<input id="manualDay" type="text" placeholder="الأحد" /></label>
-                <label>التاريخ<input id="manualDate" type="text" placeholder="2026-06-08" /></label>
-                <label>الفترة<input id="manualPeriod" type="text" placeholder="08:15 - 10:15" /></label>
-                <label>عدد الطلاب<input id="manualStudents" type="number" min="0" step="1" placeholder="30" /></label>
-                <label>القاعة<input id="manualHall" type="text" placeholder="D012" /></label>
-              </div>
-              <div class="actions-row"><button id="addManualExamBtn" class="primary-btn" type="button">إضافة الاختبار</button></div>
-              <p id="manualExamStatus" class="soft-note"></p>
-            </section>
-
-            <section class="admin-card edit-card settings-card">
-              <h2>تعديل بيانات الامتحانات</h2>
-              <p>اختر تاريخ الامتحان ثم القاعة، وبعدها يمكنك تعديل القاعة أو عدد الطلبة أو أي بيانات أخرى في السجلات المعروضة.</p>
-              <div class="edit-filters">
-                <label>تاريخ الامتحان<select id="editDateSelect"><option value="">اختر التاريخ</option></select></label>
-                <label>القاعة<select id="editHallSelect"><option value="">اختر القاعة</option></select></label>
-              </div>
-              <div id="editRows" class="edit-rows"></div>
-              <div class="actions-row"><button id="saveEditsBtn" class="primary-btn" type="button">حفظ التعديلات</button></div>
-              <p id="editStatus" class="soft-note"></p>
-            </section>
-          </section>
-
-          <section class="settings-section" data-settings-section="student-counts">
-            <section class="admin-card settings-card compact-card">
-              <h2>تحديث أعداد الطلبة من قوائم الشعب</h2>
-              <p class="soft-note">ارفع ملف PDF الصادر من النظام، ثم اعرض الفروقات قبل اعتماد التحديث.</p>
-              <div class="settings-form-grid two-cols">
-                <label class="file-picker-label">اختيار ملف PDF لقوائم الشعب
-                  <input id="studentCountsPdfFile" type="file" accept=".pdf" />
-                </label>
-                <label>رموز الاستبعاد
-                  <input id="studentExclusionCodes" type="text" value="W, FW" />
-                </label>
-              </div>
-              <div class="actions-row"><button id="analyzeStudentCountsBtn" class="primary-btn" type="button">تحليل ومقارنة الأعداد</button><button id="applySelectedStudentCountsBtn" class="secondary-btn" type="button">اعتماد تحديث المحدد فقط</button></div>
-              <div id="studentCountsDiffSummary" class="soft-note">سيتم عرض الفروقات هنا بعد تحليل الملف.</div>
-              <div id="studentCountsDiffTable" class="support-hall-table-wrap"></div>
             </section>
           </section>
         </div>
@@ -448,8 +478,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
-  <script src="firebase-config.js?v=66"></script>
-  <script src="sample-data.js?v=66"></script>
-  <script src="app.js?v=66"></script>
+  <script src="firebase-config.js?v=70"></script>
+  <script src="sample-data.js?v=70"></script>
+  <script src="app.js?v=70"></script>
 </body>
 </html>

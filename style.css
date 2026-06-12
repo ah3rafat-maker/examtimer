@@ -1805,3 +1805,75 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
 #earlyEndBtn.early-end-btn::before,button#earlyEndBtn.early-end-btn::before{content:"×"!important;font-size:26px!important;font-weight:900!important;line-height:1!important;display:block!important;color:#C62828!important;transform:translateY(-1px);}
 .admin-user-row em{color:#0B2E6B;font-weight:900;font-style:normal;background:#EEF4FF;border-radius:999px;padding:6px 10px;}
 @media(max-width:1000px){.settings-layout{grid-template-columns:1fr}.settings-sidebar{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}.settings-nav-btn{text-align:center}.settings-form-grid.two-cols,.settings-form-grid.three-cols,.stats-filter-row,.alert-setting-row{grid-template-columns:1fr}.admin-shell{padding:16px 12px!important;}}
+
+
+/* V70: structured settings control center */
+.admin-shell{max-width:1320px!important;margin:0 auto!important;padding:18px 18px 28px!important;}
+.settings-layout-v70{grid-template-columns:260px minmax(0,1fr)!important;gap:18px!important;}
+.settings-sidebar{max-height:calc(100vh - 36px);overflow:auto;}
+.settings-nav-btn{font-size:15px!important;min-height:48px!important;line-height:1.25!important;}
+.settings-content-v70 .settings-card{border-top:5px solid #0B2E6B;}
+.settings-content-v70 .settings-section[data-settings-section="timer-alerts"] .settings-card{border-top-color:#E7771A;}
+.settings-content-v70 .settings-section[data-settings-section="attendance"] .settings-card{border-top-color:#2B7A78;}
+.settings-content-v70 .settings-section[data-settings-section="hall-management"] .settings-card{border-top-color:#D64541;}
+.settings-content-v70 .settings-section[data-settings-section="statistics"] .settings-card{border-top-color:#1D4ED8;}
+.settings-content-v70 .settings-section[data-settings-section="platform"] .settings-card{border-top-color:#166534;}
+.settings-content-v70 .settings-card h2{display:flex;align-items:center;gap:8px;margin-bottom:14px;color:#0B2E6B;}
+.timer-position-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:12px 0 16px;}
+.radio-card{border:1px solid var(--line);border-radius:18px;background:#fff;padding:16px;display:flex!important;flex-direction:column!important;gap:8px!important;cursor:pointer;min-height:110px;}
+.radio-card input{width:auto!important;align-self:flex-start;}
+.radio-card span{font-weight:900;color:#0B2E6B;font-size:18px;}
+.radio-card small{color:var(--muted);font-weight:600;line-height:1.6;}
+.placeholder-panel{border:1px dashed #B7C3D6;border-radius:16px;background:#F8FAFD;padding:22px;color:#526174;font-weight:800;text-align:center;}
+.settings-form-grid.three-cols{grid-template-columns:repeat(3,minmax(0,1fr));}
+@media(max-width:980px){
+  .settings-layout-v70{grid-template-columns:1fr!important;}
+  .settings-sidebar{position:relative;top:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .timer-position-grid,.settings-form-grid.two-cols,.settings-form-grid.three-cols{grid-template-columns:1fr!important;}
+}
+
+/* V70: timer placement */
+.exam-view.timer-position-top{grid-template-rows:72px minmax(220px,31vh) minmax(210px,34vh)!important;}
+.exam-view.timer-position-top .meta-row{grid-row:1;}
+.exam-view.timer-position-top .timer-card{grid-row:2;}
+.exam-view.timer-position-top .course-cards{grid-row:3;}
+.exam-view.timer-position-top .hall-badge{
+  grid-column:2!important;
+  min-width:unset!important;
+  height:60px!important;
+  background:linear-gradient(180deg,#fff,#F1F6FE)!important;
+  border:1px solid var(--line)!important;
+  color:var(--ink)!important;
+  border-radius:18px!important;
+  box-shadow:0 8px 18px rgba(11,46,107,.06)!important;
+  padding:8px 22px!important;
+  font-size:clamp(18px,1.4vw,27px)!important;
+}
+.exam-view.timer-position-top .hall-badge strong{color:#0B4FC1!important;font-size:1.55em!important;}
+.exam-view.timer-position-top .absence-summary-card{
+  position:static!important;
+  transform:none!important;
+  grid-column:3!important;
+  justify-self:end!important;
+  height:60px!important;
+  width:auto!important;
+  min-width:170px!important;
+}
+.exam-view.timer-position-top .meta-row{grid-template-columns:1fr auto 1fr;}
+.exam-view.timer-position-top .total-students-card{grid-column:1!important;justify-self:start!important;}
+
+/* V70: normalize x button */
+.early-end-btn{
+  width:34px!important;
+  min-width:34px!important;
+  max-width:34px!important;
+  height:34px!important;
+  padding:0!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  font-size:18px!important;
+  font-weight:900!important;
+  line-height:1!important;
+  flex:0 0 34px!important;
+}
