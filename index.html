@@ -182,7 +182,7 @@
                   <input id="studentCountsPdfFile" type="file" accept=".pdf,.xlsx,.xls" />
                 </label>
                 <label>رموز الاستبعاد
-                  <input id="studentExclusionCodes" type="text" value="W, FW, Withdraw" />
+                  <input id="studentExclusionCodes" type="text" value="W, FW, Withdraw, Failing for unexcused absence" />
                 </label>
               </div>
               <div class="actions-row"><button id="analyzeStudentCountsBtn" class="primary-btn" type="button">تحليل ومقارنة الأعداد</button><button id="applySelectedStudentCountsBtn" class="secondary-btn" type="button">اعتماد تحديث المحدد فقط</button></div>
@@ -199,7 +199,7 @@
                 <label class="radio-card"><input type="radio" name="timerPosition" id="timerPositionBottom" value="bottom" checked /><span>أسفل</span><small>بيانات المقررات ثم المؤقت في الأسفل</small></label>
                 <label class="radio-card"><input type="radio" name="timerPosition" id="timerPositionTop" value="top" /><span>أعلى</span><small>القاعة والطلبة والغياب ثم المؤقت ثم بيانات المقررات</small></label>
               </div>
-              <div class="actions-row"><button id="saveTimerPositionBtn" class="primary-btn" type="button">حفظ موضع المؤقت</button></div>
+              <button id="saveTimerPositionBtn" class="primary-btn" type="button">حفظ موضع المؤقت</button>
             </section>
 
             <section class="admin-card settings-card compact-card">
@@ -210,7 +210,7 @@
                 <div class="alert-setting-row"><span>تنبيه قبل النهاية بـ 15 دقيقة</span><label class="switch-line"><input id="beepFifteenEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepFifteenDurationInput" type="number" min="1" step="1" placeholder="1" /></div>
                 <div class="alert-setting-row"><span>تنبيه نهاية الاختبار</span><label class="switch-line"><input id="beepEndEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepEndDurationInput" type="number" min="1" step="1" placeholder="10" /></div>
               </div>
-              <div class="actions-row"><button id="saveAlertsBtn" class="primary-btn" type="button">حفظ إعدادات التنبيهات</button></div>
+              <button id="saveAlertsBtn" class="primary-btn" type="button">حفظ إعدادات التنبيهات</button>
             </section>
           </section>
 
@@ -257,19 +257,22 @@
           <section class="settings-section" data-settings-section="statistics">
             <section class="admin-card stats-card settings-card">
               <h2>الإحصائيات</h2>
+              <p class="soft-note">اختر نطاق الإحصائية أولًا لعرض البيانات.</p>
               <div class="stats-filter-row">
                 <label>نطاق الإحصائية
                   <select id="adminStatsScopeSelect">
-                    <option value="all">شامل</option>
-                    <option value="week">أسبوع</option>
+                    <option value="">اختر النطاق</option>
                     <option value="day">يوم</option>
+                    <option value="week">أسبوع</option>
+                    <option value="all">شامل</option>
                   </select>
                 </label>
                 <label id="adminStatsDayWrap" class="hidden">اليوم<select id="adminStatsDaySelect"></select></label>
                 <label id="adminStatsWeekWrap" class="hidden">الأسبوع<select id="adminStatsWeekSelect"></select></label>
-                <label id="adminStatsPeriodWrap">الفترة<select id="adminStatsPeriodSelect"></select></label>
+                <label id="adminStatsPeriodWrap" class="hidden">الفترة<select id="adminStatsPeriodSelect"></select></label>
               </div>
-
+              <div id="adminStatsPlaceholder" class="placeholder-panel">اختر نطاق الإحصائية والبيانات المطلوبة لعرض النتائج.</div>
+              <div id="adminStatsContent" class="hidden">
               <div class="overview-grid">
                 <div class="overview-card"><span>آخر تحديث للبيانات</span><strong id="statLastUpdate">غير محدد</strong></div>
                 <div class="overview-card"><span>متبقي على نهاية فترة الاختبارات</span><strong id="statDaysRemaining">0 يوم</strong></div>
@@ -302,6 +305,7 @@
               <div class="stats-section-title">القاعات المستخدمة اليوم</div>
               <div id="todayHallStudents" class="hall-students-stats"></div>
               <p id="adminStatus" class="soft-note"></p>
+              </div>
             </section>
           </section>
 

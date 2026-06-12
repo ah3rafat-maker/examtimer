@@ -2189,12 +2189,28 @@ function initTermSettings(){
     alert("تم حفظ إعدادات النظام.");
   });
 
-  document.getElementById("clearExamDataBtn")?.addEventListener("click", () => {
+  document.getElementById("clearExamDataBtn")?.addEventListener("click", async () => {
     if (!requireCloudForSharedSave()) return;
     if (!confirm("سيتم تفريغ قاعدة بيانات الامتحانات الحالية بالكامل. هل أنت متأكد؟")) return;
     if (!confirm("تأكيد نهائي: لا يمكن التراجع عن تفريغ قاعدة البيانات إلا بإعادة رفع ملف الامتحانات.")) return;
-    saveExams([]);
+    const stamp = Date.now();
+    localStorage.setItem(STORE_KEYS.exams, JSON.stringify([]));
+    localStorage.setItem(STORE_KEYS.examsMirror, JSON.stringify([]));
     localStorage.removeItem(STORE_KEYS.fileName);
+    localStorage.setItem("finalExamTimer.exams.updatedAt", String(stamp));
+    localStorage.setItem("examTimerData.updatedAt", String(stamp));
+    try {
+      if (cloudReady && firestoreDoc(FIRESTORE_DOCS.exams)) {
+        await firestoreDoc(FIRESTORE_DOCS.exams).set({ rows: [], rowsJson: "[]", updatedAt: stamp, fileName: "", clearedAt: stamp }, { merge: false });
+      }
+      if (cloudReady && firestoreDoc(FIRESTORE_DOCS.settings)) {
+        const del = window.firebase && window.firebase.firestore ? window.firebase.firestore.FieldValue.delete() : null;
+        await firestoreDoc(FIRESTORE_DOCS.settings).set(del ? { updatedAt: stamp, fileName: "", rows: del, rowsJson: del, examsData: del, examsJson: del } : { updatedAt: stamp, fileName: "" }, { merge: true });
+      }
+    } catch (err) { console.error(err); alert("تم التفريغ محليًا، لكن تعذر تفريغ Firestore. تحقق من القواعد."); }
+    suppressCloudSave = true;
+    applyCloudRows([], stamp);
+    suppressCloudSave = false;
     refreshAllExams();
     populateSettingsFilterOptions();
     populateEditDates();
@@ -2375,7 +2391,7 @@ function initSettingsSidebar(){
   const storedSettingsSection = localStorage.getItem('finalExamTimer.settings.activeSection');
   showSection(storedSettingsSection || buttons.find(b=>b.classList.contains('active'))?.dataset.settingsSectionTarget || 'exam-file');
   ['absenceStatsScopeSelect','absenceStatsDaySelect','absenceStatsWeekSelect','absenceStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { window.__absenceStatsRequested = true; updateAdminAbsenceStats(); }));
-  ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { updateStatsScopeControls(); updateStats(); }));
+  ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { window.__adminStatsRequested = true; updateStatsScopeControls(); updateStats(); }));
   document.getElementById('showAbsenceStatsBtn')?.addEventListener('click', () => { window.__absenceStatsRequested = true; updateAdminAbsenceStats(); });
   document.getElementById("analyzeStudentCountsBtn")?.addEventListener("click", analyzeStudentCountsFile);
   document.getElementById("applySelectedStudentCountsBtn")?.addEventListener("click", applySelectedStudentCountUpdates);
@@ -2398,7 +2414,7 @@ function resetAbsenceStatsView(){
   if (details) details.innerHTML = '<div class="placeholder-panel">اختر نطاق الإحصائية والبيانات المطلوبة ثم اضغط عرض الإحصائية.</div>';
 }
 function updateStatsScopeControls(){
-  const scope = document.getElementById('adminStatsScopeSelect')?.value || 'all';
+  const scope = document.getElementById('adminStatsScopeSelect')?.value || '';
   document.getElementById('adminStatsDayWrap')?.classList.toggle('hidden', scope !== 'day');
   document.getElementById('adminStatsWeekWrap')?.classList.toggle('hidden', scope !== 'week');
   document.getElementById('adminStatsPeriodWrap')?.classList.remove('hidden');
@@ -2506,12 +2522,16 @@ function cleanCourseNameFromStudentHeader(raw, code){
 }
 
 function rowHasExclusion(cells, exclusion){
+  const rawJoined = (cells || []).map(x => String(x || '')).join(' ');
+  const normalizedJoined = normalizeStudentStatus(rawJoined);
   const normalizedCells = (cells || []).map(normalizeStudentStatus).filter(Boolean);
-  if (normalizedCells.some(c => exclusion.includes(c))) return true;
-  const joined = normalizedCells.join(' ');
-  if (exclusion.includes('WITHDRAW') && /WITHDRAW/.test(joined)) return true;
-  if (exclusion.includes('FW') && /(^|\s)FW(\s|$)/.test(joined)) return true;
-  if (exclusion.includes('W') && normalizedCells.some(c => c === 'W')) return true;
+  const exclusionList = (exclusion || []).map(normalizeStudentStatus).filter(Boolean);
+  if (normalizedCells.some(c => exclusionList.includes(c))) return true;
+  if (exclusionList.some(ex => ex && normalizedJoined.includes(ex))) return true;
+  if (exclusionList.includes('WITHDRAW') && /WITHDRAW/i.test(rawJoined)) return true;
+  if (exclusionList.includes('FAILINGFORUNEXCUSEDABSENCE') && /FAILING\s+FOR\s+UNEXCUSED\s+ABSENCE/i.test(rawJoined)) return true;
+  if (exclusionList.includes('FW') && normalizedCells.some(c => c === 'FW')) return true;
+  if (exclusionList.includes('W') && normalizedCells.some(c => c === 'W')) return true;
   return false;
 }
 
@@ -2522,7 +2542,7 @@ function looksLikeCourseHeader(text){
 function summarizeStudentCountsFromFlatRows(rows){
   const map = new Map();
   let currentCode = '', currentName = '', currentSection = '';
-  const exclusion = (document.getElementById('studentExclusionCodes')?.value || 'W,FW,Withdraw,WD')
+  const exclusion = (document.getElementById('studentExclusionCodes')?.value || 'W,FW,Withdraw,WD,Failing for unexcused absence')
     .split(',').map(x=>normalizeStudentStatus(x)).filter(Boolean);
   (rows || []).forEach(row => {
     const cells = (Array.isArray(row) ? row : [row]).map(x => clean(x)).filter(x => x !== '');
@@ -2608,12 +2628,13 @@ async function analyzeStudentCountsFile(){
         diff: hit ? c.actual - current : null,
         selected: !!(hit && c.actual !== current)
       };
-    }).filter(x => x.current !== null && x.diff !== 0);
+    }).filter(x => x.current !== null);
+    const diffCount = pendingStudentCountDiffs.filter(x => x.diff !== 0).length;
     const unmatched = counts.filter(c => !examMap.has(studentCountKey(c.courseCode, c.section))).length;
-    if (summary) summary.textContent = `تم تحليل ${toArabicDigits(counts.length)} شعبة. توجد ${toArabicDigits(pendingStudentCountDiffs.length)} شعبة بها اختلاف في الأعداد. غير المطابق مع ملف الامتحانات: ${toArabicDigits(unmatched)}.`;
+    if (summary) summary.textContent = `تم تحليل ${toArabicDigits(counts.length)} شعبة. توجد ${toArabicDigits(diffCount)} شعبة بها اختلاف في الأعداد. غير المطابق مع ملف الامتحانات: ${toArabicDigits(unmatched)}.`;
     if (table) {
-      const body = pendingStudentCountDiffs.map((x,i) => `<tr class="${Math.abs(Number(x.diff)||0)>1?'diff-strong':'diff-soft'}"><td><input type="checkbox" data-student-diff-index="${i}" ${x.selected?'checked':''}></td><td>${escapeHtml(x.courseName||'')}</td><td>${escapeHtml(x.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(x.section))}</td><td>${toArabicDigits(x.current)}</td><td>${toArabicDigits(x.actual)}</td><td>${toArabicDigits(x.diff)}</td><td>${toArabicDigits(x.excluded)}</td></tr>`).join('');
-      table.innerHTML = `<table class="support-hall-table student-count-diff-table"><thead><tr><th>تحديد</th><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>العدد الحالي</th><th>العدد الصحيح</th><th>الفرق</th><th>W/FW</th></tr></thead><tbody>${body || '<tr><td colspan="8">لا توجد فروقات مطابقة. تأكد من أن الملف يحتوي كود المقرر ورقم الشعبة وأرقام الطلبة كنص قابل للقراءة.</td></tr>'}</tbody></table>`;
+      const body = pendingStudentCountDiffs.map((x,i) => `<tr class="${x.diff===0?'diff-ok':Math.abs(Number(x.diff)||0)>1?'diff-strong':'diff-soft'}"><td><input type="checkbox" data-student-diff-index="${i}" ${x.selected?'checked':''} ${x.diff===0?'disabled':''}></td><td>${escapeHtml(x.courseName||'')}</td><td>${escapeHtml(x.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(x.section))}</td><td>${toArabicDigits(x.current)}</td><td>${toArabicDigits(x.total)}</td><td>${toArabicDigits(x.excluded)}</td><td>${toArabicDigits(x.actual)}</td><td>${toArabicDigits(x.diff)}</td></tr>`).join('');
+      table.innerHTML = `<table class="support-hall-table student-count-diff-table"><thead><tr><th>تحديد</th><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>العدد الحالي</th><th>إجمالي الملف</th><th>المستبعدون</th><th>العدد الفعلي</th><th>الفرق</th></tr></thead><tbody>${body || '<tr><td colspan="9">لم يتم العثور على شعب مطابقة. تأكد من أن الملف يحتوي كود المقرر ورقم الشعبة وأرقام الطلبة كنص قابل للقراءة.</td></tr>'}</tbody></table>`;
     }
     logAdminOperation('تحليل أعداد الطلبة', file.name);
   } catch (err) {
@@ -2626,7 +2647,7 @@ function applySelectedStudentCountUpdates(){
   if (!pendingStudentCountDiffs.length) return alert('لا توجد فروقات لاعتمادها.');
   if (!requireCloudForSharedSave()) return;
   const rows = getStoredExams();
-  const selected = [...document.querySelectorAll('[data-student-diff-index]:checked')].map(el => pendingStudentCountDiffs[Number(el.dataset.studentDiffIndex)]).filter(Boolean);
+  const selected = [...document.querySelectorAll('[data-student-diff-index]:checked')].map(el => pendingStudentCountDiffs[Number(el.dataset.studentDiffIndex)]).filter(x => x && x.diff !== 0);
   if (!selected.length) return alert('يرجى تحديد شعبة واحدة على الأقل للتحديث.');
   selected.forEach(x => { if (rows[x.rowIndex]) setStudentsValue(rows[x.rowIndex], x.actual); });
   saveExams(rows); refreshAllExams(); updateStats('تم تحديث أعداد الطلبة المحددة.'); populateEditDates(); populateSettingsFilterOptions();
@@ -3164,6 +3185,18 @@ function daysRemainingToLastExam(exams, now = new Date()){
 }
 function updateStats(message=""){
   updateDataFileInfo();
+  const scopeControl = document.getElementById('adminStatsScopeSelect');
+  const contentBox = document.getElementById('adminStatsContent');
+  const placeholder = document.getElementById('adminStatsPlaceholder');
+  if (scopeControl && (!scopeControl.value || !window.__adminStatsRequested)) {
+    if (contentBox) contentBox.classList.add('hidden');
+    if (placeholder) placeholder.classList.remove('hidden');
+    const statusOnly = document.getElementById("adminStatus");
+    if (statusOnly) statusOnly.textContent = message || "";
+    return;
+  }
+  if (contentBox) contentBox.classList.remove('hidden');
+  if (placeholder) placeholder.classList.add('hidden');
   const rows = getStoredExams();
   const allScopedExams = rows.map(normalizeExam).filter(e => e.hall && e.date && e.period);
   const exams = filterExamsByAdminScope(allScopedExams, 'adminStats');

@@ -1965,3 +1965,14 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
 .absence-report-table th,.absence-report-table td{padding:5px 7px!important;line-height:1.2!important;vertical-align:middle!important;}
 .student-count-diff-table input[type="checkbox"]{width:14px!important;height:14px!important;min-width:14px!important;min-height:14px!important;}
 .absence-stats-summary:empty{display:none!important;}
+
+
+/* V76: compact admin tables and left-aligned action buttons */
+.settings-card .actions-row{justify-content:flex-start!important;direction:ltr!important;align-items:center!important;gap:8px!important;}
+.settings-card > .primary-btn,.settings-card > .secondary-btn,.settings-card > .danger-btn{display:block!important;margin-right:auto!important;margin-left:0!important;}
+.settings-card .primary-btn,.settings-card .secondary-btn,.settings-card .danger-btn{height:36px!important;min-height:36px!important;padding:0 12px!important;border-radius:10px!important;font-size:13.5px!important;}
+.student-count-diff-table,#operationLogList .support-hall-table,.absence-report-table{font-size:12px!important;line-height:1.15!important;}
+.student-count-diff-table th,.student-count-diff-table td,#operationLogList .support-hall-table th,#operationLogList .support-hall-table td,.absence-report-table th,.absence-report-table td{padding:4px 6px!important;line-height:1.15!important;vertical-align:middle!important;}
+.student-count-diff-table input[type="checkbox"]{width:13px!important;height:13px!important;min-width:13px!important;min-height:13px!important;margin:0!important;padding:0!important;}
+.student-count-diff-table .diff-ok td{background:#F4FFF6!important;}
+#adminStatsPlaceholder.placeholder-panel,#absenceStatsDetails .placeholder-panel{padding:18px!important;text-align:center;color:var(--muted);background:#F8FAFD;border:1px dashed #CBD7E6;border-radius:14px;}
