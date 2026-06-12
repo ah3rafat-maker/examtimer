@@ -2521,8 +2521,18 @@ async function printAbsenceStatsReport(){
 }
 
 let pendingStudentCountDiffs = [];
+function normalizeCourseCodeForKey(code){
+  const raw = clean(code).toUpperCase();
+  const match = raw.match(/[A-Z]{2,8}\s*\d{3,5}/);
+  return (match ? match[0] : raw).replace(/\s+/g, '');
+}
+function normalizeSectionForKey(section){
+  const s = clean(section);
+  const m = s.match(/\d{1,4}/);
+  return m ? m[0] : s.toUpperCase();
+}
 function studentCountKey(code, section){
-  return `${clean(code).toUpperCase()}|${clean(section).replace(/\D/g,'') || clean(section)}`;
+  return `${normalizeCourseCodeForKey(code)}|${normalizeSectionForKey(section)}`;
 }
 function normalizeStudentStatus(value){
   return String(value || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
@@ -2616,6 +2626,15 @@ function summarizeStudentCountsFromFlatRows(rows){
   let currentCode = '', currentName = '', currentSection = '', headerMap = {};
   const exclusion = (document.getElementById('studentExclusionCodes')?.value || 'W,FW,Withdraw,WD,Failing for unexcused absence')
     .split(',').map(x=>normalizeStudentStatus(x)).filter(Boolean);
+
+  function ensureItem(code, name, section){
+    const k = studentCountKey(code, section);
+    if (!map.has(k)) map.set(k, { courseCode:normalizeCourseCodeForKey(code), courseName:name || '', section:normalizeSectionForKey(section), total:0, excluded:0, actual:0, excludedExamples:[] });
+    const item = map.get(k);
+    if (name && (!item.courseName || item.courseName.length < 3)) item.courseName = name;
+    return item;
+  }
+
   (rows || []).forEach(row => {
     const cells = (Array.isArray(row) ? row : [row]).map(x => clean(x));
     const nonEmpty = cells.filter(x => x !== '');
@@ -2625,7 +2644,7 @@ function summarizeStudentCountsFromFlatRows(rows){
     const possibleHeader = updateHeaderMapFromRow(cells);
     if (Object.keys(possibleHeader).length >= 2) { headerMap = { ...headerMap, ...possibleHeader }; return; }
 
-    // Tabular Excel rows may include course code/name/section as columns on each row.
+    // Extract current course/section from report header lines or repeated Excel columns.
     if (headerMap.courseCode !== undefined && cells[headerMap.courseCode]) currentCode = extractCourseCodeFromText(cells[headerMap.courseCode]) || clean(cells[headerMap.courseCode]);
     if (headerMap.courseName !== undefined && cells[headerMap.courseName]) currentName = cleanCourseNameFromStudentHeader(cells[headerMap.courseName], currentCode);
     if (headerMap.section !== undefined && cells[headerMap.section]) currentSection = extractSectionFromText(cells[headerMap.section]) || clean(cells[headerMap.section]).replace(/\D/g,'') || clean(cells[headerMap.section]);
@@ -2634,9 +2653,12 @@ function summarizeStudentCountsFromFlatRows(rows){
     if (code) currentCode = code;
     const sec = extractSectionFromText(joined);
     if (sec) currentSection = sec;
+
     const nameMatch = joined.match(/(?:Course\s*Name|Course\s*Title|اسم\s*المقرر)\s*[:\-]?\s*(.+)$/i);
     if (nameMatch) currentName = cleanCourseNameFromStudentHeader(nameMatch[1], currentCode);
-    if (currentCode && !looksLikeStudentRow(cells) && !/SECTION|SEC\.?|الشعبة|Student|ID|Name|Remarks|Signature|Department|Lecturer|No\s*Of\s*Student/i.test(joined) && joined.length > 4 && !extractCourseCodeFromText(joined)) {
+
+    // In some exported Excel files the course name appears as "EDMA2213-3 : الحسبان".
+    if (currentCode && !looksLikeStudentRow(cells) && !/SECTION|SEC\.?|الشعبة|Student|ID|Name|Remarks|Signature|Department|Lecturer|No\s*Of\s*Student/i.test(joined)) {
       const cleanedName = cleanCourseNameFromStudentHeader(joined, currentCode);
       if (cleanedName && (!currentName || currentName.length < 3)) currentName = cleanedName;
     }
@@ -2645,11 +2667,14 @@ function summarizeStudentCountsFromFlatRows(rows){
     if (currentCode && currentSection && isStudent) {
       const remarks = getRemarksFromRow(cells, headerMap);
       const status = rowHasExclusion([remarks], exclusion) || rowHasExclusion(cells, exclusion);
-      const k = studentCountKey(currentCode, currentSection);
-      if (!map.has(k)) map.set(k, { courseCode:currentCode, courseName:currentName, section:currentSection, total:0, excluded:0, actual:0 });
-      const item = map.get(k);
+      const item = ensureItem(currentCode, currentName, currentSection);
       item.total++;
-      if (status) item.excluded++; else item.actual++;
+      if (status) {
+        item.excluded++;
+        if (item.excludedExamples.length < 3) item.excludedExamples.push(remarks || cells.join(' '));
+      } else {
+        item.actual++;
+      }
     }
   });
   return [...map.values()];
@@ -2718,7 +2743,8 @@ async function analyzeStudentCountsFile(){
     if (summary) summary.textContent = `تم تحليل ${toArabicDigits(counts.length)} شعبة. توجد ${toArabicDigits(diffCount)} شعبة بها اختلاف في الأعداد. غير المطابق مع ملف الامتحانات: ${toArabicDigits(unmatched)}.`;
     if (table) {
       const body = pendingStudentCountDiffs.map((x,i) => `<tr class="${x.diff===0?'diff-ok':Math.abs(Number(x.diff)||0)>1?'diff-strong':'diff-soft'}"><td><input type="checkbox" data-student-diff-index="${i}" ${x.selected?'checked':''} ${x.diff===0?'disabled':''}></td><td>${escapeHtml(x.courseName||'')}</td><td>${escapeHtml(x.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(x.section))}</td><td>${toArabicDigits(x.current)}</td><td>${toArabicDigits(x.total)}</td><td>${toArabicDigits(x.excluded)}</td><td>${toArabicDigits(x.actual)}</td><td>${toArabicDigits(x.diff)}</td></tr>`).join('');
-      table.innerHTML = `<table class="support-hall-table student-count-diff-table"><thead><tr><th>تحديد</th><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>العدد الحالي</th><th>إجمالي الملف</th><th>المستبعدون</th><th>العدد الفعلي</th><th>الفرق</th></tr></thead><tbody>${body || '<tr><td colspan="9">لم يتم العثور على شعب مطابقة. تأكد من أن الملف يحتوي كود المقرر ورقم الشعبة وأرقام الطلبة كنص قابل للقراءة.</td></tr>'}</tbody></table>`;
+      const unmatchedRows = counts.filter(c => !examMap.has(studentCountKey(c.courseCode, c.section))).map(c => `<tr class="diff-unmatched"><td>—</td><td>${escapeHtml(c.courseName||'')}</td><td>${escapeHtml(c.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(c.section))}</td><td>غير مطابق</td><td>${toArabicDigits(c.total)}</td><td>${toArabicDigits(c.excluded)}</td><td>${toArabicDigits(c.actual)}</td><td>—</td></tr>`).join('');
+      table.innerHTML = `<table class="student-count-diff-table"><thead><tr><th>تحديد</th><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>العدد الحالي</th><th>إجمالي الملف</th><th>المستبعدون</th><th>العدد الفعلي</th><th>الفرق</th></tr></thead><tbody>${body || ''}${unmatchedRows || ''}${(!body && !unmatchedRows) ? '<tr><td colspan="9">لم يتم العثور على شعب قابلة للتحليل. تأكد من أن الملف يحتوي كود المقرر ورقم الشعبة وأرقام الطلبة كنص قابل للقراءة.</td></tr>' : ''}</tbody></table>`;
     }
     logAdminOperation('تحليل أعداد الطلبة', file.name);
   } catch (err) {

@@ -1976,3 +1976,44 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
 .student-count-diff-table input[type="checkbox"]{width:13px!important;height:13px!important;min-width:13px!important;min-height:13px!important;margin:0!important;padding:0!important;}
 .student-count-diff-table .diff-ok td{background:#F4FFF6!important;}
 #adminStatsPlaceholder.placeholder-panel,#absenceStatsDetails .placeholder-panel{padding:18px!important;text-align:center;color:var(--muted);background:#F8FAFD;border:1px dashed #CBD7E6;border-radius:14px;}
+
+
+/* v78: compact and complete student-count comparison table */
+#studentCountsDiffTable{
+  overflow-x:auto!important;
+  width:100%;
+  border:1px solid #E6EEF7;
+  border-radius:14px;
+  background:#fff;
+  margin-top:10px;
+}
+#studentCountsDiffTable .student-count-diff-table{
+  width:100%;
+  min-width:920px;
+  border-collapse:collapse!important;
+  table-layout:auto!important;
+  font-size:12px!important;
+  line-height:1.15!important;
+}
+#studentCountsDiffTable .student-count-diff-table th,
+#studentCountsDiffTable .student-count-diff-table td{
+  padding:5px 7px!important;
+  line-height:1.15!important;
+  vertical-align:middle!important;
+  border-bottom:1px solid #EEF2F7!important;
+  word-break:normal!important;
+  white-space:normal!important;
+  text-align:center;
+}
+#studentCountsDiffTable .student-count-diff-table th{
+  background:#FFF3E7!important;
+  color:#0B2E6B!important;
+  font-weight:800!important;
+}
+#studentCountsDiffTable .student-count-diff-table input[type="checkbox"]{
+  width:13px!important;height:13px!important;min-width:13px!important;min-height:13px!important;margin:0!important;padding:0!important;accent-color:#0B2E6B;
+}
+#studentCountsDiffTable .student-count-diff-table .diff-ok td{background:#F4FFF6!important;}
+#studentCountsDiffTable .student-count-diff-table .diff-soft td{background:#FFF9E8!important;}
+#studentCountsDiffTable .student-count-diff-table .diff-strong td{background:#FFF1F1!important;}
+#studentCountsDiffTable .student-count-diff-table .diff-unmatched td{background:#F7F9FC!important;color:#526070!important;}
