@@ -2189,6 +2189,20 @@ function initTermSettings(){
     alert("تم حفظ إعدادات النظام.");
   });
 
+  document.getElementById("clearExamDataBtn")?.addEventListener("click", () => {
+    if (!requireCloudForSharedSave()) return;
+    if (!confirm("سيتم تفريغ قاعدة بيانات الامتحانات الحالية بالكامل. هل أنت متأكد؟")) return;
+    if (!confirm("تأكيد نهائي: لا يمكن التراجع عن تفريغ قاعدة البيانات إلا بإعادة رفع ملف الامتحانات.")) return;
+    saveExams([]);
+    localStorage.removeItem(STORE_KEYS.fileName);
+    refreshAllExams();
+    populateSettingsFilterOptions();
+    populateEditDates();
+    updateStats("تم تفريغ قاعدة بيانات الامتحانات.");
+    logAdminOperation("تفريغ قاعدة بيانات الامتحانات");
+    alert("تم تفريغ قاعدة بيانات الامتحانات بنجاح.");
+  });
+
   saveTimerPositionBtn?.addEventListener("click", () => {
     const timerPosition = timerPositionTop?.checked ? "top" : "bottom";
     if (!requireCloudForSharedSave()) return;
@@ -2353,27 +2367,56 @@ function initSettingsSidebar(){
     buttons.forEach(b => b.classList.toggle('active', b.dataset.settingsSectionTarget === name));
     sections.forEach(s => s.classList.toggle('active', s.dataset.settingsSection === name));
     localStorage.setItem('finalExamTimer.settings.activeSection', name);
-    if (name === 'attendance') updateAdminAbsenceStats();
+    if (name === 'attendance') { populateSettingsFilterOptions(); updateAbsenceStatsScopeControls(); resetAbsenceStatsView(); }
     if (name === 'statistics') { populateSettingsFilterOptions(); updateStats(); updateStatsScopeControls(); }
     if (name === 'archive-log') renderOperationLog();
   }
   buttons.forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.settingsSectionTarget)));
   const storedSettingsSection = localStorage.getItem('finalExamTimer.settings.activeSection');
   showSection(storedSettingsSection || buttons.find(b=>b.classList.contains('active'))?.dataset.settingsSectionTarget || 'exam-file');
-  ['absenceStatsScopeSelect','absenceStatsDaySelect','absenceStatsWeekSelect','absenceStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', updateAdminAbsenceStats));
-
-  document.getElementById("printAbsenceReportBtn")?.addEventListener("click", printAbsenceStatsReport);
+  ['absenceStatsScopeSelect','absenceStatsDaySelect','absenceStatsWeekSelect','absenceStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { window.__absenceStatsRequested = true; updateAdminAbsenceStats(); }));
+  ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { updateStatsScopeControls(); updateStats(); }));
+  document.getElementById('showAbsenceStatsBtn')?.addEventListener('click', () => { window.__absenceStatsRequested = true; updateAdminAbsenceStats(); });
   document.getElementById("analyzeStudentCountsBtn")?.addEventListener("click", analyzeStudentCountsFile);
   document.getElementById("applySelectedStudentCountsBtn")?.addEventListener("click", applySelectedStudentCountUpdates);
   renderOperationLog();
 
 }
-function updateStatsScopeControls(){ return; }
-async function updateAdminAbsenceStats(){
+
+function updateAbsenceStatsScopeControls(){
   const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'all';
   document.getElementById('absenceStatsDayWrap')?.classList.toggle('hidden', scope !== 'day');
   document.getElementById('absenceStatsWeekWrap')?.classList.toggle('hidden', scope !== 'week');
   document.getElementById('absenceStatsPeriodWrap')?.classList.remove('hidden');
+}
+function resetAbsenceStatsView(){
+  window.__absenceStatsRequested = false;
+  updateAbsenceStatsScopeControls();
+  const summary = document.getElementById('absenceStatsSummary');
+  const details = document.getElementById('absenceStatsDetails');
+  if (summary) summary.innerHTML = '';
+  if (details) details.innerHTML = '<div class="placeholder-panel">اختر نطاق الإحصائية والبيانات المطلوبة ثم اضغط عرض الإحصائية.</div>';
+}
+function updateStatsScopeControls(){
+  const scope = document.getElementById('adminStatsScopeSelect')?.value || 'all';
+  document.getElementById('adminStatsDayWrap')?.classList.toggle('hidden', scope !== 'day');
+  document.getElementById('adminStatsWeekWrap')?.classList.toggle('hidden', scope !== 'week');
+  document.getElementById('adminStatsPeriodWrap')?.classList.remove('hidden');
+}
+
+async function updateAdminAbsenceStats(){
+  updateAbsenceStatsScopeControls();
+  if (!window.__absenceStatsRequested) return;
+  const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'all';
+  const dayVal = document.getElementById('absenceStatsDaySelect')?.value || '';
+  const weekVal = document.getElementById('absenceStatsWeekSelect')?.value || '';
+  const detailsBox = document.getElementById('absenceStatsDetails');
+  const summaryBox = document.getElementById('absenceStatsSummary');
+  if ((scope === 'day' && !dayVal) || (scope === 'week' && !weekVal)) {
+    if (summaryBox) summaryBox.innerHTML = '';
+    if (detailsBox) detailsBox.innerHTML = '<div class="placeholder-panel">يرجى اختيار البيانات المطلوبة لعرض الإحصائية.</div>';
+    return;
+  }
   populateSettingsFilterOptions();
   const allReqs = await getAllAbsenceRequestsForAdmin();
   const reqs = filterRequestsByAdminScope(allReqs.filter(r => r.kind === 'absence'), 'absenceStats');
@@ -2452,11 +2495,26 @@ function looksLikeStudentRow(cells){
 function cleanCourseNameFromStudentHeader(raw, code){
   let s = String(raw || '').trim();
   if (!s) return '';
+  s = s.replace(/Course\s*Name\s*[:\-]?/ig, '').replace(/Course\s*Title\s*[:\-]?/ig, '').replace(/اسم\s*المقرر\s*[:\-]?/ig, '');
+  // Remove course codes such as EDMA2213-3 wherever they appear, then keep the readable Arabic/English name.
+  s = s.replace(/\b[A-Z]{2,6}\d{3,5}\s*-?\s*\d*\b/gi, '');
   if (code) s = s.replace(new RegExp(code + '\\s*-?\\s*\\d*', 'i'), '');
-  s = s.replace(/Course\s*Name\s*[:\-]?/ig, '').replace(/اسم\s*المقرر\s*[:\-]?/ig, '');
-  s = s.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
-  return s;
+  s = s.replace(/[：:]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const arabic = s.match(/[\u0600-\u06FF][\u0600-\u06FF\s\d()\-–]+/);
+  if (arabic) return arabic[0].replace(/^[-–\s]+|[-–\s]+$/g, '').trim();
+  return s.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
 }
+
+function rowHasExclusion(cells, exclusion){
+  const normalizedCells = (cells || []).map(normalizeStudentStatus).filter(Boolean);
+  if (normalizedCells.some(c => exclusion.includes(c))) return true;
+  const joined = normalizedCells.join(' ');
+  if (exclusion.includes('WITHDRAW') && /WITHDRAW/.test(joined)) return true;
+  if (exclusion.includes('FW') && /(^|\s)FW(\s|$)/.test(joined)) return true;
+  if (exclusion.includes('W') && normalizedCells.some(c => c === 'W')) return true;
+  return false;
+}
+
 function looksLikeCourseHeader(text){
   return /Course\s*Name|Course\s*Department|Section\s*No|Lecturer\s*Name|No\s*Of\s*Student|اسم\s*المقرر|الشعبة/i.test(String(text||''));
 }
@@ -2482,8 +2540,7 @@ function summarizeStudentCountsFromFlatRows(rows){
       if (cleanedName && (!currentName || currentName.length < 3)) currentName = cleanedName;
     }
     if (currentCode && currentSection && looksLikeStudentRow(cells)) {
-      const statuses = cells.map(normalizeStudentStatus).filter(Boolean);
-      const status = statuses.find(c => exclusion.includes(c)) || '';
+      const status = rowHasExclusion(cells, exclusion);
       const k = studentCountKey(currentCode, currentSection);
       if (!map.has(k)) map.set(k, { courseCode:currentCode, courseName:currentName, section:currentSection, total:0, excluded:0, actual:0 });
       const item = map.get(k);
@@ -3108,7 +3165,8 @@ function daysRemainingToLastExam(exams, now = new Date()){
 function updateStats(message=""){
   updateDataFileInfo();
   const rows = getStoredExams();
-  const exams = rows.map(normalizeExam).filter(e => e.hall && e.date && e.period);
+  const allScopedExams = rows.map(normalizeExam).filter(e => e.hall && e.date && e.period);
+  const exams = filterExamsByAdminScope(allScopedExams, 'adminStats');
   const now = new Date();
 
   const todayExams = exams.filter(e => isSameDay(combineDateTime(e.date, e.period.startMinutes), now));

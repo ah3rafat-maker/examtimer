@@ -128,7 +128,7 @@
                   <input id="academicYearInput" type="text" placeholder="2025 - 2026" />
                 </label>
               </div>
-              <button id="saveTermBtn" class="primary-btn" type="button">حفظ التغييرات</button>
+              <div class="actions-row"><button id="saveTermBtn" class="primary-btn" type="button">حفظ التغييرات</button></div>
             </section>
 
             <section class="admin-card data-management-card settings-card">
@@ -142,7 +142,7 @@
                 <input id="excelFile" type="file" accept=".xlsx,.xls" />
               </label>
               <p id="pendingFileSummary" class="soft-note"></p>
-              <div class="actions-row"><button id="replaceDataBtn" class="primary-btn" type="button">استبدال البيانات الحالية</button></div>
+              <div class="actions-row"><button id="replaceDataBtn" class="primary-btn" type="button">استبدال البيانات الحالية</button><button id="clearExamDataBtn" class="danger-btn" type="button">تفريغ قاعدة البيانات</button></div>
             </section>
 
             <section class="admin-card edit-card settings-card">
@@ -199,7 +199,7 @@
                 <label class="radio-card"><input type="radio" name="timerPosition" id="timerPositionBottom" value="bottom" checked /><span>أسفل</span><small>بيانات المقررات ثم المؤقت في الأسفل</small></label>
                 <label class="radio-card"><input type="radio" name="timerPosition" id="timerPositionTop" value="top" /><span>أعلى</span><small>القاعة والطلبة والغياب ثم المؤقت ثم بيانات المقررات</small></label>
               </div>
-              <button id="saveTimerPositionBtn" class="primary-btn" type="button">حفظ موضع المؤقت</button>
+              <div class="actions-row"><button id="saveTimerPositionBtn" class="primary-btn" type="button">حفظ موضع المؤقت</button></div>
             </section>
 
             <section class="admin-card settings-card compact-card">
@@ -210,7 +210,7 @@
                 <div class="alert-setting-row"><span>تنبيه قبل النهاية بـ 15 دقيقة</span><label class="switch-line"><input id="beepFifteenEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepFifteenDurationInput" type="number" min="1" step="1" placeholder="1" /></div>
                 <div class="alert-setting-row"><span>تنبيه نهاية الاختبار</span><label class="switch-line"><input id="beepEndEnabledInput" type="checkbox" checked /> مفعل</label><input id="beepEndDurationInput" type="number" min="1" step="1" placeholder="10" /></div>
               </div>
-              <button id="saveAlertsBtn" class="primary-btn" type="button">حفظ إعدادات التنبيهات</button>
+              <div class="actions-row"><button id="saveAlertsBtn" class="primary-btn" type="button">حفظ إعدادات التنبيهات</button></div>
             </section>
           </section>
 
@@ -239,9 +239,9 @@
                 <label id="absenceStatsWeekWrap" class="hidden">الأسبوع<select id="absenceStatsWeekSelect"></select></label>
                 <label id="absenceStatsPeriodWrap">الفترة<select id="absenceStatsPeriodSelect"></select></label>
               </div>
+              <div class="actions-row"><button id="showAbsenceStatsBtn" class="primary-btn" type="button">عرض الإحصائية</button></div>
               <div id="absenceStatsSummary" class="absence-stats-summary"></div>
               <div id="absenceStatsDetails" class="support-hall-table-wrap"></div>
-              <div class="actions-row"><button id="printAbsenceReportBtn" class="secondary-btn" type="button">طباعة تقرير الغياب PDF</button></div>
             </section>
           </section>
 
@@ -257,6 +257,18 @@
           <section class="settings-section" data-settings-section="statistics">
             <section class="admin-card stats-card settings-card">
               <h2>الإحصائيات</h2>
+              <div class="stats-filter-row">
+                <label>نطاق الإحصائية
+                  <select id="adminStatsScopeSelect">
+                    <option value="all">شامل</option>
+                    <option value="week">أسبوع</option>
+                    <option value="day">يوم</option>
+                  </select>
+                </label>
+                <label id="adminStatsDayWrap" class="hidden">اليوم<select id="adminStatsDaySelect"></select></label>
+                <label id="adminStatsWeekWrap" class="hidden">الأسبوع<select id="adminStatsWeekSelect"></select></label>
+                <label id="adminStatsPeriodWrap">الفترة<select id="adminStatsPeriodSelect"></select></label>
+              </div>
 
               <div class="overview-grid">
                 <div class="overview-card"><span>آخر تحديث للبيانات</span><strong id="statLastUpdate">غير محدد</strong></div>

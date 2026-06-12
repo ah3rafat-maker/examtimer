@@ -1952,3 +1952,16 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
 .absence-report-table tbody tr{min-height:auto!important;}
 .admin-user-row em{font-style:normal;color:#526070;font-weight:700;}
 @media print{.absence-report-table th,.absence-report-table td{padding:5px 6px!important;line-height:1.25!important;}}
+
+
+/* V75 refinements */
+.settings-card .actions-row{justify-content:flex-start!important;direction:ltr!important;align-items:center!important;}
+.settings-card > .primary-btn,.settings-card > .secondary-btn,.settings-card > .danger-btn{margin-right:auto!important;margin-left:0!important;}
+.student-count-diff-table,
+#operationLogList .support-hall-table,
+.absence-report-table{font-size:12.5px!important;line-height:1.2!important;}
+.student-count-diff-table th,.student-count-diff-table td,
+#operationLogList .support-hall-table th,#operationLogList .support-hall-table td,
+.absence-report-table th,.absence-report-table td{padding:5px 7px!important;line-height:1.2!important;vertical-align:middle!important;}
+.student-count-diff-table input[type="checkbox"]{width:14px!important;height:14px!important;min-width:14px!important;min-height:14px!important;}
+.absence-stats-summary:empty{display:none!important;}
