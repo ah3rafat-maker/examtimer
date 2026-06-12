@@ -1902,3 +1902,40 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
   .support-hall-table{font-size:11px!important;page-break-inside:auto!important;}
   .support-hall-table tr{page-break-inside:avoid!important;}
 }
+
+
+/* V73: compact action buttons and improved settings tables */
+.settings-card .primary-btn,
+.settings-card .secondary-btn,
+.settings-card .danger-btn{
+  height:40px!important;
+  min-height:40px!important;
+  padding:0 16px!important;
+  border-radius:12px!important;
+  font-size:15px!important;
+  font-weight:800!important;
+  min-width:auto!important;
+}
+.settings-card .actions-row{
+  justify-content:flex-start!important;
+  direction:ltr!important;
+  gap:8px!important;
+}
+.settings-card > .primary-btn,
+.settings-card > .secondary-btn,
+.settings-card > .danger-btn{
+  display:inline-grid!important;
+  margin-top:14px!important;
+  margin-right:auto!important;
+  margin-left:0!important;
+}
+.absence-report-table th,
+.absence-report-table td,
+.student-count-diff-table th,
+.student-count-diff-table td{
+  padding:10px 9px!important;
+  line-height:1.55!important;
+  vertical-align:middle!important;
+}
+.student-count-diff-table .diff-strong td{background:#FFF1F1!important;}
+.student-count-diff-table .diff-soft td{background:#FFF9E8!important;}
