@@ -16,7 +16,7 @@ const STORE_KEYS = {
   beepFifteenDuration: "finalExamTimer.beepFifteenDuration",
   beepEndDuration: "finalExamTimer.beepEndDuration"
 };
- 
+
 const DEFAULT_PASSWORD = "1234";
 const FIRESTORE_DOCS = {
   settings: ["settings", "config"],
@@ -598,7 +598,7 @@ function getExamSeason(date = new Date()){
     return { active:true, semester:`ربيع ${y}`, academicYear:`${y - 1} - ${y}` };
   }
   if ((m === 8 && d >= 16) || (m === 9 && d <= 7)) {
-    return { active:true, semester:`صيف ${y}`, academicYear:`${y - 1} - ${y}` };
+    return { active:true, semester:`صيفي ${y}`, academicYear:`${y - 1} - ${y}` };
   }
   return { active:false };
 }
@@ -2004,6 +2004,8 @@ function initTermSettings(){
   const supportNewCodeInput = document.getElementById("supportNewCodeInput");
   const supportConfirmCodeInput = document.getElementById("supportConfirmCodeInput");
   const saveSupportCodeBtn = document.getElementById("saveSupportCodeBtn");
+  const supportChairNameInput = document.getElementById("supportChairNameInput");
+  const supportChairTitleInput = document.getElementById("supportChairTitleInput");
   if (!semesterSelect || !academicYearInput || !saveBtn) return;
   const fallback = getExamSeason();
   const fallbackSemester = fallback.active ? String(fallback.semester).split(" ")[0] : "ربيع";
@@ -2016,6 +2018,8 @@ function initTermSettings(){
   if (beepFifteenDurationInput) beepFifteenDurationInput.value = localStorage.getItem(STORE_KEYS.beepFifteenDuration) || (cloudSettingsCache && cloudSettingsCache.beepFifteenDuration) || "1";
   if (beepEndDurationInput) beepEndDurationInput.value = localStorage.getItem(STORE_KEYS.beepEndDuration) || (cloudSettingsCache && cloudSettingsCache.beepEndDuration) || "10";
   [supportCurrentCodeInput, supportNewCodeInput, supportConfirmCodeInput].forEach(el => { if (el) el.value = ""; });
+  if (supportChairNameInput) supportChairNameInput.value = localStorage.getItem(STORE_KEYS.supportChairName) || (cloudSettingsCache && cloudSettingsCache.supportChairName) || "";
+  if (supportChairTitleInput) supportChairTitleInput.value = localStorage.getItem(STORE_KEYS.supportChairTitle) || (cloudSettingsCache && cloudSettingsCache.supportChairTitle) || "";
 
   saveBtn.addEventListener("click", () => {
     const sem = semesterSelect.value;
@@ -2038,24 +2042,43 @@ function initTermSettings(){
     localStorage.setItem(STORE_KEYS.beepEndDuration, beepEndDuration);
     saveCloudSettings({ semester: sem, academicYear: ay, attendanceTime, beepStartDuration, beepHalfDuration, beepFifteenDuration, beepEndDuration });
     setTitles();
-    alert("تم حفظ إعدادات الفصل الدراسي.");
+    alert("تم حفظ الإعدادات بنجاح.");
   });
 
   saveSupportCodeBtn?.addEventListener("click", () => {
     const currentSupportCode = supportCurrentCodeInput ? supportCurrentCodeInput.value.trim() : "";
     const newSupportCode = supportNewCodeInput ? supportNewCodeInput.value.trim() : "";
     const confirmSupportCode = supportConfirmCodeInput ? supportConfirmCodeInput.value.trim() : "";
+    const chairName = supportChairNameInput ? supportChairNameInput.value.trim() : "";
+    const chairTitle = supportChairTitleInput ? supportChairTitleInput.value.trim() : "";
     if (!requireCloudForSharedSave()) return;
-    if (currentSupportCode !== getSupportCode()) return alert("رمز دخول لجنة الدعم الحالي غير صحيح.");
-    if (!newSupportCode || newSupportCode.length < 3) return alert("يرجى إدخال رمز جديد من 3 خانات على الأقل.");
-    if (newSupportCode !== confirmSupportCode) return alert("الرمز الجديد وتأكيده غير متطابقين.");
-    localStorage.setItem(STORE_KEYS.supportCode, newSupportCode);
-    saveCloudSettings({ supportCode: newSupportCode });
-    [supportCurrentCodeInput, supportNewCodeInput, supportConfirmCodeInput].forEach(el => { if (el) el.value = ""; });
-    alert("تم تغيير رمز دخول لجنة الدعم بنجاح.");
+
+    const payload = { supportChairName: chairName, supportChairTitle: chairTitle };
+    localStorage.setItem(STORE_KEYS.supportChairName, chairName);
+    localStorage.setItem(STORE_KEYS.supportChairTitle, chairTitle);
+
+    if (currentSupportCode || newSupportCode || confirmSupportCode) {
+      if (currentSupportCode !== getSupportCode()) return alert("رمز دخول لجنة الدعم الحالي غير صحيح.");
+      if (!newSupportCode || newSupportCode.length < 3) return alert("يرجى إدخال رمز جديد من 3 خانات على الأقل.");
+      if (newSupportCode !== confirmSupportCode) return alert("الرمز الجديد وتأكيده غير متطابقين.");
+      localStorage.setItem(STORE_KEYS.supportCode, newSupportCode);
+      payload.supportCode = newSupportCode;
+      [supportCurrentCodeInput, supportNewCodeInput, supportConfirmCodeInput].forEach(el => { if (el) el.value = ""; });
+    }
+
+    saveCloudSettings(payload);
+    alert("تم حفظ إعدادات لجنة الدعم بنجاح.");
+  });
+
+  document.getElementById("saveAlertSettingsBtn")?.addEventListener("click", () => saveBtn.click());
+  document.getElementById("saveAbsenceSettingsBtn")?.addEventListener("click", () => saveBtn.click());
+  document.getElementById("analyzeStudentCountsBtn")?.addEventListener("click", () => {
+    alert("تم تجهيز واجهة مراجعة أعداد الطلبة. تحتاج هذه الخاصية إلى تفعيل محلل PDF في نسخة لاحقة.");
+  });
+  document.getElementById("applySelectedStudentCountsBtn")?.addEventListener("click", () => {
+    alert("لا توجد نتائج محددة للاعتماد بعد. يرجى تحليل ملف قوائم الشعب أولًا.");
   });
 }
-
 
 function getReportSelectedSections(){
   const selected = {};
@@ -2309,8 +2332,8 @@ function renderAdminsListFromDocs(docs){
   box.innerHTML = admins.map(a => {
     const isPrimary = a.email === PRIMARY_ADMIN_EMAIL;
     return `<div class="admin-user-row">
-      <div><strong>${escapeHtml(a.email)}</strong>${isPrimary ? '<span>مسؤول رئيسي</span>' : '<span>أدمن</span>'}</div>
-      ${isPrimary ? '<em>لا يمكن حذفه</em>' : `<button type="button" class="danger-btn" data-remove-admin="${escapeHtml(a.email)}">حذف</button>`}
+      <div><strong>${escapeHtml(a.email)}</strong>${isPrimary ? '<span>👑 مالك النظام</span>' : '<span>أدمن</span>'}</div>
+      ${isPrimary ? '<em class="owner-lock-note">لا يمكن حذف مالك النظام</em>' : `<button type="button" class="danger-btn" data-remove-admin="${escapeHtml(a.email)}">حذف</button>`}
     </div>`;
   }).join("");
   box.querySelectorAll("[data-remove-admin]").forEach(btn => {

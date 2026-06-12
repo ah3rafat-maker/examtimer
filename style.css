@@ -1769,3 +1769,340 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
   width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;border-radius:11px!important;
 }
 @media(max-width:900px){#earlyEndBtn.early-end-btn,button#earlyEndBtn.early-end-btn{width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;flex-basis:34px!important;}}
+
+
+/* v68 admin settings redesign */
+.admin-shell{
+  max-width:1400px!important;
+  margin:0 auto!important;
+  padding:22px 20px 28px!important;
+}
+.admin-settings-redesign{
+  width:100%;
+}
+.settings-quick-nav{
+  display:grid;
+  grid-template-columns:repeat(8,minmax(90px,1fr));
+  gap:8px;
+  background:#0B2E6B;
+  border:1px solid #092659;
+  border-radius:16px;
+  padding:8px;
+  box-shadow:0 10px 24px rgba(11,46,107,.12);
+  margin-bottom:12px;
+  direction:rtl;
+}
+.settings-quick-nav a{
+  color:#fff;
+  text-decoration:none;
+  text-align:center;
+  font-weight:700;
+  font-size:14px;
+  padding:10px 8px;
+  border-radius:12px;
+  transition:.15s ease;
+}
+.settings-quick-nav a:hover{
+  background:rgba(255,255,255,.12);
+}
+.settings-card-grid{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  align-items:stretch;
+}
+.settings-module{
+  margin-bottom:0!important;
+  padding:18px!important;
+  border-radius:18px!important;
+  min-height:250px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  position:relative;
+  overflow:hidden;
+}
+.settings-module::before{
+  content:"";
+  position:absolute;
+  inset-inline:0;
+  top:0;
+  height:3px;
+  background:#0B4FC1;
+}
+.settings-module h2{
+  margin:0 0 8px!important;
+  font-size:21px!important;
+  color:#0B2E6B!important;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.settings-module label{
+  display:block;
+  margin:0 0 8px;
+  color:#1F2937;
+  font-weight:700;
+  font-size:14px;
+}
+.settings-module input,
+.settings-module select{
+  width:100%;
+  margin-top:5px;
+  min-height:36px;
+  border:1px solid #D8E0EA;
+  border-radius:9px;
+  background:#fff;
+  color:#0B2E6B;
+  font-weight:700;
+  padding:7px 10px;
+  font-family:inherit;
+}
+.settings-module .primary-btn,
+.settings-module .secondary-btn,
+.settings-module .danger-btn{
+  min-height:38px;
+  border-radius:10px;
+  font-size:14px;
+  font-weight:700;
+  margin-top:auto;
+}
+.system-module::before,.admin-users-module::before,.exams-module::before,.stats-module::before{background:#0B4FC1}
+.alerts-module::before{background:#F97316}
+.absence-module::before{background:#7C3AED}
+.support-module::before{background:#16A34A}
+.excel-module::before,.student-counts-module::before{background:#0891B2}
+.halls-module::before{background:#E11D48}
+
+.modern-sound-grid{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:6px!important;
+}
+.modern-sound-grid label{
+  display:grid;
+  grid-template-columns:1fr 92px;
+  align-items:center;
+  gap:8px;
+  margin:0;
+}
+.modern-sound-grid input{
+  margin-top:0!important;
+  direction:ltr;
+  text-align:center;
+}
+
+.compact-admins-list{
+  max-height:142px;
+  overflow:auto;
+  border:1px solid #E5EAF2;
+  border-radius:12px;
+  padding:6px;
+  background:#F8FAFC;
+}
+.admin-user-row{
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:center;
+  gap:8px;
+  padding:8px;
+  border-radius:9px;
+  background:#fff;
+  border:1px solid #E5EAF2;
+  margin-bottom:6px;
+}
+.admin-user-row strong{font-size:12px;color:#0B2E6B;direction:ltr;display:block}
+.admin-user-row span{font-size:11px;color:#0B4FC1;font-weight:700}
+.admin-user-row em,
+.owner-lock-note{
+  font-style:normal;
+  color:#64748B;
+  background:#EEF4FD;
+  border:1px solid #D8E0EA;
+  padding:4px 7px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+}
+.admin-user-row .danger-btn{
+  margin:0!important;
+  min-height:28px!important;
+  padding:0 9px!important;
+  font-size:11px!important;
+}
+
+.file-info-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.file-info-grid div{
+  background:#F1F6FE;
+  border:1px solid #D8E0EA;
+  border-radius:10px;
+  padding:8px;
+}
+.file-info-grid span{display:block;color:#64748B;font-size:11px;font-weight:700}
+.file-info-grid strong{display:block;color:#0B2E6B;font-size:12px;word-break:break-word}
+.file-picker-label{
+  border:1px dashed #73A7E8!important;
+  border-radius:14px!important;
+  background:#F8FBFF!important;
+  min-height:88px;
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  color:#0B4FC1!important;
+  cursor:pointer;
+}
+.file-picker-label input{display:none}
+
+.halls-module{
+  grid-column:span 2;
+}
+.exams-module{
+  grid-column:span 2;
+}
+.student-counts-module,
+.stats-module{
+  grid-column:1/-1;
+  min-height:auto;
+}
+.exam-actions-strip{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin-bottom:8px;
+}
+.manual-exam-inline,
+.edit-exam-inline{
+  border:1px solid #E5EAF2;
+  border-radius:14px;
+  padding:12px;
+  background:#F8FAFC;
+  margin-top:10px;
+}
+.manual-exam-inline h3,
+.edit-exam-inline h3{
+  margin:0 0 8px;
+  color:#0B2E6B;
+  font-size:18px;
+}
+.manual-exam-grid{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:8px!important;
+}
+.edit-filters{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:10px!important;
+}
+.edit-rows{
+  max-height:340px;
+  overflow:auto;
+  border-radius:12px;
+}
+.hall-locks-list{
+  max-height:255px;
+  overflow:auto;
+}
+.hall-lock-row,
+.hall-lock-item{
+  border:1px solid #E5EAF2;
+  border-radius:12px;
+  background:#fff;
+  padding:9px;
+  margin-bottom:8px;
+}
+.student-counts-layout{
+  display:grid;
+  grid-template-columns:1.3fr 1fr auto;
+  gap:12px;
+  align-items:end;
+}
+.student-counts-summary{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  margin:10px 0;
+}
+.student-counts-summary div{
+  border:1px solid #D8E0EA;
+  background:#F1F6FE;
+  border-radius:12px;
+  padding:10px;
+  text-align:center;
+}
+.student-counts-summary strong{
+  display:block;
+  font-size:28px;
+  color:#0B4FC1;
+}
+.student-counts-summary span{
+  color:#64748B;
+  font-weight:700;
+}
+.student-counts-diff-table{
+  border:1px dashed #D8E0EA;
+  border-radius:12px;
+  padding:14px;
+  text-align:center;
+  color:#64748B;
+  background:#fff;
+}
+.stats-module .stats-grid{
+  grid-template-columns:repeat(7,minmax(0,1fr))!important;
+}
+.stats-module .stats-grid div{
+  padding:10px!important;
+  border-radius:12px!important;
+}
+.stats-module .stats-grid strong{
+  font-size:24px!important;
+}
+.stats-module .stats-grid span{
+  font-size:12px!important;
+}
+.stats-section-title{
+  color:#0B2E6B;
+  font-weight:800;
+  margin-top:10px;
+}
+.settings-module .soft-note{
+  font-size:12px;
+  line-height:1.5;
+}
+.early-end-btn{
+  width:34px!important;
+  height:34px!important;
+  min-width:34px!important;
+  max-width:34px!important;
+  padding:0!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  line-height:1!important;
+  font-size:17px!important;
+  font-weight:900!important;
+  border-radius:11px!important;
+  background:#DC2626!important;
+  border:1px solid #FCA5A5!important;
+  color:#fff!important;
+}
+@media(max-width:1250px){
+  .settings-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .halls-module,.exams-module{grid-column:span 2}
+  .manual-exam-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .settings-quick-nav{grid-template-columns:repeat(4,1fr)}
+}
+@media(max-width:760px){
+  .admin-shell{padding:14px 10px 24px!important}
+  .settings-card-grid{grid-template-columns:1fr}
+  .settings-quick-nav{grid-template-columns:repeat(2,1fr)}
+  .halls-module,.exams-module,.student-counts-module,.stats-module{grid-column:1}
+  .manual-exam-grid,.edit-filters,.student-counts-layout{grid-template-columns:1fr!important}
+  .exam-actions-strip{grid-template-columns:1fr}
+  .stats-module .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
