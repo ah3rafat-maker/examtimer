@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>مؤقت الامتحانات النهائية</title>
-  <link rel="stylesheet" href="style.css?v=71" />
+  <link rel="stylesheet" href="style.css?v=70" />
 </head>
 <body class="display-page">
   <main id="displayPage" class="display-shell">
@@ -132,9 +132,8 @@
             </section>
 
             <section class="admin-card data-management-card settings-card">
-              <h2 class="section-title-with-status"><span id="examFileCloudDot" class="cloud-status-dot section-status-dot" aria-label="حالة الاتصال"></span>إدارة ملف الامتحانات</h2>
+              <h2 class="section-title-with-status"><span>إدارة ملف الامتحانات</span><span class="cloud-status-dot" title="حالة الاتصال بقاعدة البيانات"></span></h2>
               <p>يدعم الملف بالأعمدة: رمز المقرر، اسم المقرر، الشعبة، اليوم، التاريخ، الفترة، عدد الطلاب، القاعة.</p>
-              <p class="soft-note cloud-status"></p>
               <div class="file-info-grid">
                 <div><span>اسم الملف الحالي</span><strong id="currentFileName">غير محدد</strong></div>
                 <div><span>تاريخ آخر تحديث</span><strong id="currentFileUpdated">غير محدد</strong></div>
@@ -179,7 +178,7 @@
               <h2>تحديث أعداد الطلبة</h2>
               <p class="soft-note">ارفع ملف PDF أو Excel الصادر من النظام، ثم اعرض الفروقات قبل اعتماد التحديث. سيتم تجميع الصفحات المتعددة للشعبة الواحدة تلقائيًا عند التحليل.</p>
               <div class="settings-form-grid two-cols">
-                <label class="file-picker-label">اختيار ملف PDF أو Excel لقوائم الشعب
+                <label class="file-picker-label">اختيار ملف قوائم الشعب PDF أو Excel
                   <input id="studentCountsPdfFile" type="file" accept=".pdf,.xlsx,.xls" />
                 </label>
                 <label>رموز الاستبعاد
@@ -227,6 +226,38 @@
             <section class="admin-card settings-card compact-card">
               <h2>إحصائية الغياب</h2>
               <p class="soft-note">يمكن عرض الإحصائية يوميًا، أسبوعيًا أو بشكل شامل، مع إمكانية تحديد فترة امتحانية معينة.</p>
+              <div class="stats-filter-row">
+                <label>نطاق الإحصائية
+                  <select id="absenceStatsScopeSelect">
+                    <option value="all">شامل فترة الامتحانات</option>
+                    <option value="day">يوم محدد</option>
+                    <option value="week">أسبوع محدد</option>
+                    
+                  </select>
+                </label>
+                <label id="absenceStatsDayWrap" class="hidden">اليوم<select id="absenceStatsDaySelect"></select></label>
+                <label id="absenceStatsWeekWrap" class="hidden">الأسبوع<select id="absenceStatsWeekSelect"></select></label>
+                <label id="absenceStatsPeriodWrap">الفترة<select id="absenceStatsPeriodSelect"></select></label>
+              </div>
+              <div id="absenceStatsSummary" class="absence-stats-summary"></div>
+              <div id="absenceStatsDetails" class="support-hall-table-wrap"></div>
+              <div class="actions-row"><button id="printAbsenceReportBtn" class="secondary-btn" type="button">طباعة تقرير الغياب PDF</button></div>
+            </section>
+          </section>
+
+          <section class="settings-section" data-settings-section="hall-management">
+            <section class="admin-card hall-locks-card settings-card">
+              <h2>إدارة القاعات المفتوحة</h2>
+              <p class="soft-note">يمكن تحرير القاعة إذا بقيت مفتوحة على جهاز آخر بسبب إغلاق المتصفح أو انقطاع الاتصال.</p>
+              <div id="hallLocksList" class="hall-locks-list"></div>
+              <div class="actions-row"><button id="releaseAllHallLocksBtn" class="danger-btn" type="button">تحرير جميع القاعات</button></div>
+            </section>
+          </section>
+
+          <section class="settings-section" data-settings-section="statistics">
+            <section class="admin-card stats-card settings-card">
+              <h2>الإحصائيات</h2>
+
               <div class="overview-grid">
                 <div class="overview-card"><span>آخر تحديث للبيانات</span><strong id="statLastUpdate">غير محدد</strong></div>
                 <div class="overview-card"><span>متبقي على نهاية فترة الاختبارات</span><strong id="statDaysRemaining">0 يوم</strong></div>
@@ -265,9 +296,8 @@
           <section class="settings-section" data-settings-section="archive-log">
             <section class="admin-card settings-card compact-card">
               <h2>السجل والأرشيف</h2>
-              <p class="soft-note">يعرض هذا القسم آخر العمليات والإشعارات المؤرشفة، مع الاحتفاظ بها لأغراض المتابعة والتقارير.</p>
-              <div class="actions-row"><button id="refreshArchiveLogBtn" class="secondary-btn" type="button">تحديث السجل</button></div>
-              <div id="archiveLogTable" class="support-hall-table-wrap"></div>
+              <p class="soft-note">يعرض هذا القسم آخر العمليات التي تمت داخل صفحة الإعدادات مع التاريخ واسم المستخدم.</p>
+              <div id="operationLogList" class="support-hall-table-wrap"></div>
             </section>
           </section>
 
@@ -411,6 +441,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
