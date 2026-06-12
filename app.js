@@ -56,6 +56,7 @@ let attendanceModalShown = false;
 let attendanceSubmitted = false;
 let attendanceSubmitInProgress = false;
 let supportAbsenceRequestsCache = [];
+let supportRequestsCache = [];
 let earlyFinishDraft = null;
 let supportWakeInterval = null;
 let currentHallLockId = "";
@@ -97,6 +98,36 @@ function supportRequestsCollection(){
 function operationLogsCollection(){
   if (!cloudDb) return null;
   return cloudDb.collection("operationLogs");
+}
+
+async function deleteCollectionDocs(collectionRef, chunkSize = 450){
+  if (!collectionRef || !window.firebase || !window.firebase.firestore) return 0;
+  let deleted = 0;
+  while (true) {
+    const snap = await collectionRef.limit(chunkSize).get();
+    if (snap.empty) break;
+    const batch = cloudDb.batch();
+    snap.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+    deleted += snap.size;
+    if (snap.size < chunkSize) break;
+  }
+  return deleted;
+}
+
+function clearLocalExamRelatedStorage(){
+  const prefixes = [
+    'finalExamTimer.attendanceSubmitted.',
+    'finalExamTimer.absenceTotal.',
+    'finalExamTimer.earlyFinished.',
+    'finalExamTimer.hallLock.',
+    'finalExamTimer.supportRequest.'
+  ];
+  const exact = [STORE_KEYS.exams, STORE_KEYS.examsMirror, STORE_KEYS.fileName, 'finalExamTimer.exams.updatedAt', 'examTimerData.updatedAt'];
+  try {
+    exact.forEach(k => localStorage.removeItem(k));
+    Object.keys(localStorage).forEach(k => { if (prefixes.some(p => k.startsWith(p))) localStorage.removeItem(k); });
+  } catch {}
 }
 function getCurrentAdminLabel(){
   return adminUserEmail || sessionStorage.getItem("finalExamTimer.firebaseAuthUser") || "مسؤول";
@@ -2194,9 +2225,9 @@ function initTermSettings(){
     if (!confirm("سيتم تفريغ قاعدة بيانات الامتحانات الحالية بالكامل. هل أنت متأكد؟")) return;
     if (!confirm("تأكيد نهائي: لا يمكن التراجع عن تفريغ قاعدة البيانات إلا بإعادة رفع ملف الامتحانات.")) return;
     const stamp = Date.now();
+    clearLocalExamRelatedStorage();
     localStorage.setItem(STORE_KEYS.exams, JSON.stringify([]));
     localStorage.setItem(STORE_KEYS.examsMirror, JSON.stringify([]));
-    localStorage.removeItem(STORE_KEYS.fileName);
     localStorage.setItem("finalExamTimer.exams.updatedAt", String(stamp));
     localStorage.setItem("examTimerData.updatedAt", String(stamp));
     try {
@@ -2207,16 +2238,27 @@ function initTermSettings(){
         const del = window.firebase && window.firebase.firestore ? window.firebase.firestore.FieldValue.delete() : null;
         await firestoreDoc(FIRESTORE_DOCS.settings).set(del ? { updatedAt: stamp, fileName: "", rows: del, rowsJson: del, examsData: del, examsJson: del } : { updatedAt: stamp, fileName: "" }, { merge: true });
       }
-    } catch (err) { console.error(err); alert("تم التفريغ محليًا، لكن تعذر تفريغ Firestore. تحقق من القواعد."); }
+      if (cloudReady) {
+        await Promise.all([
+          deleteCollectionDocs(supportRequestsCollection()),
+          deleteCollectionDocs(attendanceReportsCollection()),
+          deleteCollectionDocs(hallLocksCollection()),
+          deleteCollectionDocs(operationLogsCollection())
+        ]);
+      }
+    } catch (err) { console.error(err); alert("تم التفريغ محليًا، لكن تعذر تفريغ بعض بيانات Firestore. تحقق من القواعد."); }
+    try { localStorage.removeItem(STORE_KEYS.operationLog); } catch {}
+    supportAbsenceRequestsCache = [];
+    supportRequestsCache = [];
     suppressCloudSave = true;
     applyCloudRows([], stamp);
     suppressCloudSave = false;
     refreshAllExams();
     populateSettingsFilterOptions();
     populateEditDates();
-    updateStats("تم تفريغ قاعدة بيانات الامتحانات.");
-    logAdminOperation("تفريغ قاعدة بيانات الامتحانات");
-    alert("تم تفريغ قاعدة بيانات الامتحانات بنجاح.");
+    updateStats("تم تفريغ بيانات الامتحانات الحالية.");
+    logAdminOperation("تفريغ بيانات الامتحانات الحالية", "تم حذف الامتحانات والإشعارات والقاعات المفتوحة والبيانات المرتبطة");
+    alert("تم تفريغ بيانات الامتحانات الحالية وكل البيانات المرتبطة بها بنجاح.");
   });
 
   saveTimerPositionBtn?.addEventListener("click", () => {
@@ -2539,28 +2581,70 @@ function looksLikeCourseHeader(text){
   return /Course\s*Name|Course\s*Department|Section\s*No|Lecturer\s*Name|No\s*Of\s*Student|اسم\s*المقرر|الشعبة/i.test(String(text||''));
 }
 
+function detectHeaderIndex(cells, patterns){
+  const normalized = (cells || []).map(c => clean(c).toLowerCase());
+  for (let i=0; i<normalized.length; i++) {
+    if (patterns.some(p => p.test(normalized[i]))) return i;
+  }
+  return -1;
+}
+
+function updateHeaderMapFromRow(cells){
+  const map = {};
+  (cells || []).forEach((c,i) => {
+    const v = clean(c).toLowerCase();
+    if (/student\s*no|student\s*number|رقم\s*الطالب/.test(v)) map.studentNo = i;
+    if (/student\s*name|اسم\s*الطالب/.test(v)) map.studentName = i;
+    if (/remarks|remark|student'?s\s*signature|signature|الملاحظات|ملاحظات|توقيع/.test(v)) map.remarks = i;
+    if (/course\s*code|رمز\s*المقرر|الكود/.test(v)) map.courseCode = i;
+    if (/course\s*name|اسم\s*المقرر|المقرر/.test(v)) map.courseName = i;
+    if (/section|section\s*no|الشعبة|شعبه/.test(v)) map.section = i;
+  });
+  return map;
+}
+
+function getRemarksFromRow(cells, headerMap){
+  if (headerMap && headerMap.remarks !== undefined) return clean(cells[headerMap.remarks]);
+  // In UTAS reports the exclusion status may appear in Remarks or Student's Signature columns.
+  const joined = (cells || []).map(clean).join(' ');
+  const m = joined.match(/(Withdraw|Failing\s+for\s+unexcused\s+absence|FW|\bW\b)/i);
+  return m ? m[0] : '';
+}
+
 function summarizeStudentCountsFromFlatRows(rows){
   const map = new Map();
-  let currentCode = '', currentName = '', currentSection = '';
+  let currentCode = '', currentName = '', currentSection = '', headerMap = {};
   const exclusion = (document.getElementById('studentExclusionCodes')?.value || 'W,FW,Withdraw,WD,Failing for unexcused absence')
     .split(',').map(x=>normalizeStudentStatus(x)).filter(Boolean);
   (rows || []).forEach(row => {
-    const cells = (Array.isArray(row) ? row : [row]).map(x => clean(x)).filter(x => x !== '');
-    if (!cells.length) return;
-    const joined = cells.join(' ');
+    const cells = (Array.isArray(row) ? row : [row]).map(x => clean(x));
+    const nonEmpty = cells.filter(x => x !== '');
+    if (!nonEmpty.length) return;
+    const joined = nonEmpty.join(' ');
+
+    const possibleHeader = updateHeaderMapFromRow(cells);
+    if (Object.keys(possibleHeader).length >= 2) { headerMap = { ...headerMap, ...possibleHeader }; return; }
+
+    // Tabular Excel rows may include course code/name/section as columns on each row.
+    if (headerMap.courseCode !== undefined && cells[headerMap.courseCode]) currentCode = extractCourseCodeFromText(cells[headerMap.courseCode]) || clean(cells[headerMap.courseCode]);
+    if (headerMap.courseName !== undefined && cells[headerMap.courseName]) currentName = cleanCourseNameFromStudentHeader(cells[headerMap.courseName], currentCode);
+    if (headerMap.section !== undefined && cells[headerMap.section]) currentSection = extractSectionFromText(cells[headerMap.section]) || clean(cells[headerMap.section]).replace(/\D/g,'') || clean(cells[headerMap.section]);
+
     const code = extractCourseCodeFromText(joined);
     if (code) currentCode = code;
     const sec = extractSectionFromText(joined);
     if (sec) currentSection = sec;
     const nameMatch = joined.match(/(?:Course\s*Name|Course\s*Title|اسم\s*المقرر)\s*[:\-]?\s*(.+)$/i);
     if (nameMatch) currentName = cleanCourseNameFromStudentHeader(nameMatch[1], currentCode);
-    // Sometimes the course name is a standalone line immediately after the course code.
     if (currentCode && !looksLikeStudentRow(cells) && !/SECTION|SEC\.?|الشعبة|Student|ID|Name|Remarks|Signature|Department|Lecturer|No\s*Of\s*Student/i.test(joined) && joined.length > 4 && !extractCourseCodeFromText(joined)) {
       const cleanedName = cleanCourseNameFromStudentHeader(joined, currentCode);
       if (cleanedName && (!currentName || currentName.length < 3)) currentName = cleanedName;
     }
-    if (currentCode && currentSection && looksLikeStudentRow(cells)) {
-      const status = rowHasExclusion(cells, exclusion);
+
+    const isStudent = looksLikeStudentRow(cells) || (headerMap.studentNo !== undefined && /^\d/.test(clean(cells[headerMap.studentNo]).replace(/\s+/g,'')));
+    if (currentCode && currentSection && isStudent) {
+      const remarks = getRemarksFromRow(cells, headerMap);
+      const status = rowHasExclusion([remarks], exclusion) || rowHasExclusion(cells, exclusion);
       const k = studentCountKey(currentCode, currentSection);
       if (!map.has(k)) map.set(k, { courseCode:currentCode, courseName:currentName, section:currentSection, total:0, excluded:0, actual:0 });
       const item = map.get(k);
