@@ -2237,25 +2237,14 @@ function initSettingsSidebar(){
     buttons.forEach(b => b.classList.toggle('active', b.dataset.settingsSectionTarget === name));
     sections.forEach(s => s.classList.toggle('active', s.dataset.settingsSection === name));
     if (name === 'attendance') updateAdminAbsenceStats();
-    if (name === 'statistics') { populateSettingsFilterOptions(); updateStats(); updateStatsScopeControls(); }
+    if (name === 'statistics') { populateSettingsFilterOptions(); updateStats(); }
+    if (name === 'archive-log') renderArchiveLog();
   }
   buttons.forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.settingsSectionTarget)));
   showSection(buttons.find(b=>b.classList.contains('active'))?.dataset.settingsSectionTarget || 'exam-file');
   ['absenceStatsScopeSelect','absenceStatsDaySelect','absenceStatsWeekSelect','absenceStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', updateAdminAbsenceStats));
-  ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { updateStats(); updateStatsScopeControls(); }));
-
-  document.getElementById("printAbsenceReportBtn")?.addEventListener("click", () => window.print());
-  document.getElementById("printStatsReportBtn")?.addEventListener("click", () => window.print());
-  document.getElementById("exportBackupBtn")?.addEventListener("click", () => {
-    const payload = { exams:getStoredExams(), settings:{ semester:localStorage.getItem(STORE_KEYS.semester), academicYear:localStorage.getItem(STORE_KEYS.academicYear) }, exportedAt:new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "utastimer-backup.json";
-    a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href), 500);
-  });
-  document.getElementById("importBackupBtn")?.addEventListener("click", () => alert("سيتم تفعيل الاستيراد الآمن للنسخ الاحتياطية في إصدار لاحق."));
+  document.getElementById("printAbsenceReportBtn")?.addEventListener("click", generateAbsenceStatsReport);
+  document.getElementById("refreshArchiveLogBtn")?.addEventListener("click", renderArchiveLog);
 
 }
 function updateStatsScopeControls(){
@@ -2263,8 +2252,10 @@ function updateStatsScopeControls(){
   ['Day','Week','Period'].forEach(k => document.getElementById('adminStats'+k+'Wrap')?.classList.toggle('hidden', scope !== k.toLowerCase()));
 }
 async function updateAdminAbsenceStats(){
-  const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'all';
-  ['Day','Week','Period'].forEach(k => document.getElementById('absenceStats'+k+'Wrap')?.classList.toggle('hidden', scope !== k.toLowerCase()));
+  const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'day';
+  document.getElementById('absenceStatsDayWrap')?.classList.toggle('hidden', scope !== 'day');
+  document.getElementById('absenceStatsWeekWrap')?.classList.toggle('hidden', scope !== 'week');
+  document.getElementById('absenceStatsPeriodWrap')?.classList.remove('hidden');
   populateSettingsFilterOptions();
   const allReqs = await getAllAbsenceRequestsForAdmin();
   const reqs = filterRequestsByAdminScope(allReqs.filter(r => r.kind === 'absence'), 'absenceStats');
@@ -2281,6 +2272,51 @@ async function updateAdminAbsenceStats(){
     }).join('');
     details.innerHTML = `<table class="support-hall-table"><thead><tr><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>تاريخ الاختبار</th><th>الفترة</th><th>القاعة</th><th>الغياب</th><th>توقيت التسجيل</th></tr></thead><tbody>${rows || '<tr><td colspan="8">لا توجد بيانات غياب</td></tr>'}</tbody></table>`;
   }
+}
+
+
+async function getAllSupportRequestsForAdmin(){
+  if (supportRequestsCollection()) {
+    try {
+      const snap = await supportRequestsCollection().get();
+      const rows = [];
+      snap.forEach(doc => rows.push({ id:doc.id, ...(doc.data() || {}) }));
+      return rows;
+    } catch (err) {
+      console.warn("Could not load support request log", err);
+    }
+  }
+  return [];
+}
+async function renderArchiveLog(){
+  const box = document.getElementById("archiveLogTable");
+  if (!box) return;
+  box.innerHTML = '<div class="placeholder-panel">جاري تحميل السجل...</div>';
+  const rows = await getAllSupportRequestsForAdmin();
+  const sorted = rows.slice().sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0)).slice(0,250);
+  const htmlRows = sorted.map(r => {
+    const t = r.createdAtMs ? toArabicDigits(new Intl.DateTimeFormat("ar-OM-u-nu-latn-ca-gregory", {dateStyle:"short", timeStyle:"short"}).format(new Date(r.createdAtMs))) : "";
+    const status = r.archived ? "مؤرشف" : (r.acknowledged ? "تم الاستلام" : "نشط");
+    return `<tr><td>${escapeHtml(t)}</td><td>${escapeHtml(r.hall||"")}</td><td>${escapeHtml(r.kind||r.type||"")}</td><td>${escapeHtml(buildSupportRequestLabel(r))}</td><td>${escapeHtml(status)}</td></tr>`;
+  }).join("");
+  box.innerHTML = `<table class="support-hall-table"><thead><tr><th>الوقت</th><th>القاعة</th><th>النوع</th><th>التفاصيل</th><th>الحالة</th></tr></thead><tbody>${htmlRows || '<tr><td colspan="5">لا يوجد سجل عمليات حتى الآن</td></tr>'}</tbody></table>`;
+}
+async function generateAbsenceStatsReport(){
+  await updateAdminAbsenceStats();
+  const title = getSupportReportTitleData();
+  const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'day';
+  const day = document.getElementById('absenceStatsDaySelect')?.value || '';
+  const week = document.getElementById('absenceStatsWeekSelect')?.selectedOptions?.[0]?.textContent || '';
+  const period = document.getElementById('absenceStatsPeriodSelect')?.value || 'كل الفترات';
+  const label = scope === 'day' ? `ليوم ${day || 'محدد'}` : scope === 'week' ? `${week || 'لأسبوع محدد'}` : 'شاملة';
+  const table = document.getElementById('absenceStatsDetails')?.innerHTML || '';
+  const summary = document.getElementById('absenceStatsSummary')?.innerHTML || '';
+  const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>إحصائية الغياب</title><style>
+  @page{size:A4;margin:15mm 12mm} body{font-family:Tahoma,Arial,sans-serif;color:#0B2E6B;line-height:1.6;margin:0}.report-head{display:flex;align-items:center;gap:18px;border-bottom:3px solid #0B2E6B;padding-bottom:12px;margin-bottom:18px}.report-head img{width:150px;max-height:70px;object-fit:contain}.report-title{flex:1;text-align:center}.report-title h1{margin:0 0 6px;font-size:24px}.report-title p{margin:2px 0;font-size:14px}.absence-stats-summary{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:12px 0}.absence-stats-summary>div{border:1px solid #D8E1EF;border-radius:12px;padding:12px;text-align:center;background:#F6F8FC}.absence-stats-summary strong{font-size:28px;color:#E7771A;display:block}.support-hall-table{width:100%;border-collapse:collapse;font-size:11px}.support-hall-table th,.support-hall-table td{border:1px solid #B8C6D9;padding:7px;text-align:center}.support-hall-table th{background:#0B2E6B;color:#fff}@media print{.report-head{break-after:avoid}thead{display:table-header-group}}
+  </style></head><body><header class="report-head"><img src="assets/logo.png"><div class="report-title"><h1>إحصائية الغياب</h1><p>الامتحانات النهائية للفصل الدراسي (${escapeHtml(title.semester||'')})</p><p>العام الأكاديمي (${escapeHtml(title.academicYear||'')})</p><p>${escapeHtml(label)} - ${escapeHtml(period || 'كل الفترات')}</p></div></header><main>${summary}${table}</main><script>setTimeout(()=>window.print(),400)</script></body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) return alert('تعذر فتح نافذة التقرير.');
+  w.document.open(); w.document.write(html); w.document.close();
 }
 
 function getReportSelectedSections(){
@@ -2441,7 +2477,7 @@ function initAdmin(){
         adminAuthorized = true;
         adminUserEmail = normalizeEmail(user.email);
         sessionStorage.setItem("finalExamTimer.adminLoggedIn","true");
-        login.classList.add("hidden"); settings.classList.remove("hidden");
+        login.classList.add("hidden"); settings.classList.remove("hidden"); document.getElementById('adminPage')?.classList.add('admin-authenticated');
         updateStats(); resetAdminInactivity(); loadAdminsList();
       } else {
         alert("Firebase Authentication غير مفعّل. يرجى تفعيل Google Sign-in في Firebase.");
@@ -2892,7 +2928,10 @@ function showAppPage(){
   const admin = document.getElementById("adminPage");
   const support = document.getElementById("supportPage");
   if (display) display.classList.toggle("hidden", isAdmin || isSupport);
-  if (admin) admin.classList.toggle("hidden", !isAdmin);
+  if (admin) {
+    admin.classList.toggle("hidden", !isAdmin);
+    admin.classList.toggle("admin-authenticated", isAdmin && sessionStorage.getItem("finalExamTimer.adminLoggedIn") === "true");
+  }
   if (support) support.classList.toggle("hidden", !isSupport);
   updateTopDate();
   updateCopyright();
@@ -2913,11 +2952,13 @@ function showAppPage(){
     if (sessionStorage.getItem("finalExamTimer.adminLoggedIn") === "true") {
       if (login) login.classList.add("hidden");
       if (settings) settings.classList.remove("hidden");
+      admin?.classList.add('admin-authenticated');
       loadAdminsList();
       resetAdminInactivity();
     } else {
       if (login) login.classList.remove("hidden");
       if (settings) settings.classList.add("hidden");
+      admin?.classList.remove('admin-authenticated');
     }
     populateEditDates();
     updateStats();

@@ -1877,3 +1877,28 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
   line-height:1!important;
   flex:0 0 34px!important;
 }
+
+
+/* V71: final admin polish */
+#adminPage:not(.admin-authenticated) #adminOpenSupportBtn{display:none!important;}
+.settings-content-v70 .settings-card{border-top-color:#E7771A!important;}
+.settings-content-v70 .settings-card h2{color:#0B2E6B!important;border-bottom:1px solid #F2D8BD;padding-bottom:10px;}
+.settings-content-v70 .settings-card h2::before{content:"";width:12px;height:12px;border-radius:50%;background:#18A058;display:inline-block;box-shadow:0 0 0 4px rgba(24,160,88,.12);flex:0 0 auto;}
+.settings-content-v70 .settings-card h2:not(.section-title-with-status)::before{background:#E7771A;box-shadow:0 0 0 4px rgba(231,119,26,.13);}
+.section-title-with-status .section-status-dot{margin-inline-start:0;margin-inline-end:0;}
+.section-title-with-status::before{display:none!important;content:none!important;}
+.settings-nav-btn{padding-inline-start:14px!important;padding-inline-end:14px!important;}
+.support-hall-table{border-collapse:separate!important;border-spacing:0 8px!important;width:100%;}
+.support-hall-table th{background:#0B2E6B!important;color:#fff!important;padding:10px!important;}
+.support-hall-table td{background:#fff!important;border-top:1px solid #D8E1EF!important;border-bottom:1px solid #D8E1EF!important;padding:10px 8px!important;line-height:1.55!important;}
+.support-hall-table tr td:first-child{border-right:1px solid #D8E1EF!important;border-radius:0 12px 12px 0;}
+.support-hall-table tr td:last-child{border-left:1px solid #D8E1EF!important;border-radius:12px 0 0 12px;}
+@media print{
+  body.admin-mode #adminPage header,
+  body.admin-mode .settings-sidebar,
+  body.admin-mode .actions-row,
+  body.admin-mode footer{display:none!important;}
+  body.admin-mode .admin-shell{max-width:none!important;padding:0!important;margin:0!important;}
+  body.admin-mode .settings-layout{display:block!important;}
+  body.admin-mode .settings-section{display:block!important;}
+}
