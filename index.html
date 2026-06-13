@@ -176,16 +176,30 @@
 
             <section class="admin-card settings-card compact-card">
               <h2>تحديث أعداد الطلبة</h2>
-              <p class="soft-note">ارفع ملف PDF أو Excel الصادر من النظام، ثم اعرض الفروقات قبل اعتماد التحديث. سيتم تجميع الصفحات المتعددة للشعبة الواحدة تلقائيًا عند التحليل.</p>
+              <p class="soft-note">ارفع ملف Excel الصادر من النظام، ثم اعرض الفروقات قبل اعتماد التحديث. سيتم تجميع الأوراق المتعددة للشعبة الواحدة تلقائيًا عند التحليل.</p>
               <div class="settings-form-grid two-cols">
-                <label class="file-picker-label">اختيار ملف قوائم الشعب PDF أو Excel
-                  <input id="studentCountsPdfFile" type="file" accept=".pdf,.xlsx,.xls" />
+                <label class="file-picker-label">اختيار ملف قوائم الشعب Excel
+                  <input id="studentCountsPdfFile" type="file" accept=".xlsx,.xls" />
                 </label>
                 <label>رموز الاستبعاد
                   <input id="studentExclusionCodes" type="text" value="W, FW, Withdraw, Failing for unexcused absence" />
                 </label>
               </div>
-              <div class="actions-row"><button id="analyzeStudentCountsBtn" class="primary-btn" type="button">تحليل ومقارنة الأعداد</button><button id="applySelectedStudentCountsBtn" class="secondary-btn" type="button">اعتماد تحديث المحدد فقط</button></div>
+              <div id="studentColumnMappingBox" class="settings-form-grid two-cols hidden">
+                <label>عمود رقم الطالب
+                  <select id="studentNumberColumnSelect"></select>
+                </label>
+                <label>عمود حالة الطالب
+                  <select id="studentStatusColumnSelect"></select>
+                </label>
+              </div>
+              <div class="actions-row">
+                <button id="analyzeStudentCountsBtn" class="primary-btn" type="button">تحليل ومقارنة الأعداد</button>
+                <button id="selectAllStudentDiffsBtn" class="secondary-btn" type="button">تحديد الكل</button>
+                <button id="clearAllStudentDiffsBtn" class="secondary-btn" type="button">إلغاء تحديد الكل</button>
+                <button id="applySelectedStudentCountsBtn" class="secondary-btn" type="button">اعتماد تحديث المحدد فقط</button>
+                <button id="cancelStudentCountsBtn" class="danger-btn" type="button">إلغاء</button>
+              </div>
               <div id="studentCountsDiffSummary" class="soft-note">سيتم عرض الفروقات هنا بعد تحليل الملف.</div>
               <div id="studentCountsDiffTable" class="support-hall-table-wrap"></div>
             </section>
@@ -458,7 +472,6 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>

@@ -1194,15 +1194,14 @@ function periodMatchesFilter(requestObj, filterValue){
 }
 function makeExamKey(row){
   if (!row) return "";
-
   const date = String(row["التاريخ"] || row.date || "").trim();
   const period = String(row["الفترة"] || row.period || "").trim();
   const hall = String(row["القاعة"] || row.hall || "").trim();
   const code = String(row["رمز المقرر"] || row.courseCode || "").trim();
   const section = String(row["الشعبة"] || row.section || "").trim();
-
   return [date, period, hall, code, section].join("|");
 }
+
 function findExamForAbsenceRequest(r){
   const exams = getAllNormalizedExams();
   if (!r) return null;
@@ -2447,8 +2446,12 @@ function initSettingsSidebar(){
   ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { window.__adminStatsRequested = false; updateStatsScopeControls(); updateStats(); }));
   document.getElementById('showAbsenceStatsBtn')?.addEventListener('click', () => { window.__absenceStatsRequested = true; updateAdminAbsenceStats(); });
   document.getElementById('showAdminStatsBtn')?.addEventListener('click', () => { window.__adminStatsRequested = true; updateStatsScopeControls(); updateStats(); });
+  document.getElementById("studentCountsPdfFile")?.addEventListener("change", prepareStudentCountsFile);
   document.getElementById("analyzeStudentCountsBtn")?.addEventListener("click", analyzeStudentCountsFile);
   document.getElementById("applySelectedStudentCountsBtn")?.addEventListener("click", applySelectedStudentCountUpdates);
+  document.getElementById("cancelStudentCountsBtn")?.addEventListener("click", () => resetStudentCountsUpdateSection());
+  document.getElementById("selectAllStudentDiffsBtn")?.addEventListener("click", () => document.querySelectorAll('[data-student-diff-index]:not(:disabled)').forEach(el => el.checked = true));
+  document.getElementById("clearAllStudentDiffsBtn")?.addEventListener("click", () => document.querySelectorAll('[data-student-diff-index]:not(:disabled)').forEach(el => el.checked = false));
   renderOperationLog();
 
 }
@@ -2538,6 +2541,9 @@ async function printAbsenceStatsReport(){
 }
 
 let pendingStudentCountDiffs = [];
+let pendingStudentCountWorkbookRows = [];
+let pendingStudentCountHeaders = [];
+let pendingStudentCountFileName = "";
 function normalizeCourseCodeForKey(code){
   const raw = clean(code).toUpperCase();
   const match = raw.match(/[A-Z]{2,8}\s*\d{3,5}/);
@@ -2668,63 +2674,125 @@ function getRemarksFromRow(cells, headerMap){
   return m ? m[0] : '';
 }
 
-function summarizeStudentCountsFromFlatRows(rows){
+function normalizeHeaderName(value){
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+function isLikelyStudentNumber(value){
+  const v = String(value || '').trim().replace(/\s+/g, '');
+  return /^\d{5,15}$/.test(v) || /^\d{3,8}[A-Z]\d{2,8}$/i.test(v);
+}
+function findHeaderRowInSheet(rows){
+  let best = { index:-1, score:0, headers:[] };
+  (rows || []).forEach((row, idx) => {
+    const cells = (Array.isArray(row) ? row : [row]).map(clean);
+    const joined = cells.join(' ').toLowerCase();
+    let score = 0;
+    if (/student\s*no|student\s*number|رقم\s*الطالب/i.test(joined)) score += 4;
+    if (/remarks|remark|signature|student'?s\s*signature|ملاحظات|الملاحظات|توقيع/i.test(joined)) score += 3;
+    if (/student\s*name|اسم\s*الطالب/i.test(joined)) score += 1;
+    if (cells.filter(Boolean).length >= 3) score += 1;
+    if (score > best.score) best = { index:idx, score, headers:cells };
+  });
+  return best.score >= 4 ? best : { index:-1, score:0, headers:[] };
+}
+function collectStudentCountHeadersFromWorkbookRows(workbookRows){
+  const set = new Map();
+  (workbookRows || []).forEach(sheet => {
+    const found = findHeaderRowInSheet(sheet.rows || []);
+    (found.headers || []).forEach(h => {
+      const c = clean(h);
+      if (c) set.set(c, c);
+    });
+  });
+  return [...set.values()];
+}
+function chooseDefaultHeader(headers, patterns){
+  return (headers || []).find(h => patterns.some(p => p.test(h))) || (headers || [])[0] || '';
+}
+function buildHeaderMapFromHeaders(headers){
+  const selectedStudent = clean(document.getElementById('studentNumberColumnSelect')?.value || '');
+  const selectedStatus = clean(document.getElementById('studentStatusColumnSelect')?.value || '');
+  const map = {};
+  (headers || []).forEach((h,i)=>{
+    if (clean(h) === selectedStudent) map.studentNo = i;
+    if (clean(h) === selectedStatus) map.status = i;
+  });
+  if (map.studentNo === undefined) {
+    const i = (headers || []).findIndex(h => /student\s*no|student\s*number|رقم\s*الطالب/i.test(h));
+    if (i >= 0) map.studentNo = i;
+  }
+  if (map.status === undefined) {
+    const i = (headers || []).findIndex(h => /remarks|remark|signature|student'?s\s*signature|ملاحظات|الملاحظات|توقيع/i.test(h));
+    if (i >= 0) map.status = i;
+  }
+  return map;
+}
+function extractCourseMetaFromRows(rows, sheetName=''){
+  let code = extractCourseCodeFromText(sheetName) || '';
+  let name = '';
+  let section = extractSectionFromText(sheetName) || '';
+  const limit = Math.min((rows || []).length, 40);
+  for (let i=0; i<limit; i++) {
+    const cells = (rows[i] || []).map(clean);
+    const joined = cells.join(' ');
+    const c = extractCourseCodeFromText(joined);
+    if (c && !code) code = c;
+    const sec = extractSectionFromText(joined);
+    if (sec && !section) section = sec;
+    if (/Course\s*Name|Course\s*Title|اسم\s*المقرر/i.test(joined) || (c && /[\u0600-\u06FF]/.test(joined))) {
+      const nm = cleanCourseNameFromStudentHeader(joined, c || code);
+      if (nm && (!name || nm.length > name.length)) name = nm;
+    }
+  }
+  // If sheet name is EDMA2213-1, the last number is often section, not course title.
+  const sheetSec = String(sheetName||'').match(/[A-Z]{2,8}\s*\d{3,5}\s*[-_ ]\s*(\d{1,4})/i);
+  if (!section && sheetSec) section = sheetSec[1];
+  return { courseCode: normalizeCourseCodeForKey(code), courseName: name, section: normalizeSectionForKey(section) };
+}
+function classifyStudentStatus(value){
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^\s*W\s*$/i.test(raw) || /\bWITHDRAW(?:N|AL)?\b/i.test(raw)) return 'W';
+  if (/^\s*FW\s*$/i.test(raw) || /FAILING\s+FOR\s+UNEXCUSED\s+ABSENCE/i.test(raw)) return 'FW';
+  return '';
+}
+function summarizeStudentCountsFromWorkbookRows(workbookRows){
   const map = new Map();
-  let currentCode = '', currentName = '', currentSection = '', headerMap = {};
-  const exclusion = (document.getElementById('studentExclusionCodes')?.value || 'W,FW,Withdraw,WD,Failing for unexcused absence')
-    .split(',').map(x=>normalizeStudentStatus(x)).filter(Boolean);
-
-  function ensureItem(code, name, section){
-    const k = studentCountKey(code, section);
-    if (!map.has(k)) map.set(k, { courseCode:normalizeCourseCodeForKey(code), courseName:name || '', section:normalizeSectionForKey(section), total:0, excluded:0, actual:0, excludedExamples:[] });
+  function ensure(meta){
+    const k = studentCountKey(meta.courseCode, meta.section);
+    if (!map.has(k)) map.set(k, { courseCode:meta.courseCode, courseName:meta.courseName || '', section:meta.section, total:0, wCount:0, fwCount:0, excluded:0, actual:0 });
     const item = map.get(k);
-    if (name && (!item.courseName || item.courseName.length < 3)) item.courseName = name;
+    if (meta.courseName && (!item.courseName || item.courseName.length < 3)) item.courseName = meta.courseName;
     return item;
   }
-
-  (rows || []).forEach(row => {
-    const cells = (Array.isArray(row) ? row : [row]).map(x => clean(x));
-    const nonEmpty = cells.filter(x => x !== '');
-    if (!nonEmpty.length) return;
-    const joined = nonEmpty.join(' ');
-
-    const possibleHeader = updateHeaderMapFromRow(cells);
-    if (Object.keys(possibleHeader).length >= 2) { headerMap = { ...headerMap, ...possibleHeader }; return; }
-
-    // Extract current course/section from report header lines or repeated Excel columns.
-    if (headerMap.courseCode !== undefined && cells[headerMap.courseCode]) currentCode = extractCourseCodeFromText(cells[headerMap.courseCode]) || clean(cells[headerMap.courseCode]);
-    if (headerMap.courseName !== undefined && cells[headerMap.courseName]) currentName = cleanCourseNameFromStudentHeader(cells[headerMap.courseName], currentCode);
-    if (headerMap.section !== undefined && cells[headerMap.section]) currentSection = extractSectionFromText(cells[headerMap.section]) || clean(cells[headerMap.section]).replace(/\D/g,'') || clean(cells[headerMap.section]);
-
-    const code = extractCourseCodeFromText(joined);
-    if (code) currentCode = code;
-    const sec = extractSectionFromText(joined);
-    if (sec) currentSection = sec;
-
-    const nameMatch = joined.match(/(?:Course\s*Name|Course\s*Title|اسم\s*المقرر)\s*[:\-]?\s*(.+)$/i);
-    if (nameMatch) currentName = cleanCourseNameFromStudentHeader(nameMatch[1], currentCode);
-
-    // In some exported Excel files the course name appears as "EDMA2213-3 : الحسبان".
-    if (currentCode && !looksLikeStudentRow(cells) && !/SECTION|SEC\.?|الشعبة|Student|ID|Name|Remarks|Signature|Department|Lecturer|No\s*Of\s*Student/i.test(joined)) {
-      const cleanedName = cleanCourseNameFromStudentHeader(joined, currentCode);
-      if (cleanedName && (!currentName || currentName.length < 3)) currentName = cleanedName;
-    }
-
-    const isStudent = looksLikeStudentRow(cells) || (headerMap.studentNo !== undefined && /^\d/.test(clean(cells[headerMap.studentNo]).replace(/\s+/g,'')));
-    if (currentCode && currentSection && isStudent) {
-      const remarks = getRemarksFromRow(cells, headerMap);
-      const status = rowHasExclusion([remarks], exclusion) || rowHasExclusion(cells, exclusion);
-      const item = ensureItem(currentCode, currentName, currentSection);
+  (workbookRows || []).forEach(sheet => {
+    const rows = sheet.rows || [];
+    const found = findHeaderRowInSheet(rows);
+    if (found.index < 0) return;
+    const headerMap = buildHeaderMapFromHeaders(found.headers);
+    if (headerMap.studentNo === undefined) return;
+    const meta = extractCourseMetaFromRows(rows, sheet.name || '');
+    if (!meta.courseCode || !meta.section) return;
+    const item = ensure(meta);
+    for (let r = found.index + 1; r < rows.length; r++) {
+      const cells = (rows[r] || []).map(clean);
+      // Stop at next course header only; ignore empty/footer rows.
+      const joined = cells.join(' ');
+      if (looksLikeCourseHeader(joined) && extractCourseCodeFromText(joined) && r > found.index + 2) break;
+      const studentNo = clean(cells[headerMap.studentNo] || '');
+      if (!isLikelyStudentNumber(studentNo)) continue;
+      const statusRaw = headerMap.status !== undefined ? clean(cells[headerMap.status] || '') : '';
+      const status = classifyStudentStatus(statusRaw);
       item.total++;
-      if (status) {
-        item.excluded++;
-        if (item.excludedExamples.length < 3) item.excludedExamples.push(remarks || cells.join(' '));
-      } else {
-        item.actual++;
-      }
+      if (status === 'W') item.wCount++;
+      if (status === 'FW') item.fwCount++;
     }
   });
-  return [...map.values()];
+  return [...map.values()].map(x => ({ ...x, excluded:x.wCount + x.fwCount, actual:x.total - x.wCount - x.fwCount }));
+}
+function summarizeStudentCountsFromFlatRows(rows){
+  // Legacy fallback for very old callers; Excel analysis now uses summarizeStudentCountsFromWorkbookRows.
+  return summarizeStudentCountsFromWorkbookRows([{ name:'Sheet1', rows: rows || [] }]);
 }
 async function extractRowsFromPdfFile(file){
   if (!window.pdfjsLib) throw new Error('PDFJS_NOT_LOADED');
@@ -2749,24 +2817,73 @@ async function extractRowsFromPdfFile(file){
   }
   return rows;
 }
+async function loadStudentCountsWorkbook(file){
+  const data = new Uint8Array(await file.arrayBuffer());
+  const wb = XLSX.read(data, { type:'array', cellDates:false });
+  return wb.SheetNames.map(sn => ({ name:sn, rows:XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'', raw:false }) }));
+}
+function resetStudentCountsUpdateSection(message='سيتم عرض الفروقات هنا بعد تحليل الملف.'){
+  pendingStudentCountDiffs = [];
+  pendingStudentCountWorkbookRows = [];
+  pendingStudentCountHeaders = [];
+  pendingStudentCountFileName = '';
+  const fileInput = document.getElementById('studentCountsPdfFile');
+  if (fileInput) fileInput.value = '';
+  const mapBox = document.getElementById('studentColumnMappingBox');
+  if (mapBox) mapBox.classList.add('hidden');
+  const stSel = document.getElementById('studentNumberColumnSelect');
+  const statusSel = document.getElementById('studentStatusColumnSelect');
+  if (stSel) stSel.innerHTML = '';
+  if (statusSel) statusSel.innerHTML = '';
+  const summary = document.getElementById('studentCountsDiffSummary');
+  if (summary) summary.textContent = message;
+  const table = document.getElementById('studentCountsDiffTable');
+  if (table) table.innerHTML = '';
+}
+async function prepareStudentCountsFile(){
+  const file = document.getElementById('studentCountsPdfFile')?.files?.[0];
+  if (!file) return;
+  const name = file.name.toLowerCase();
+  if (!(name.endsWith('.xlsx') || name.endsWith('.xls'))) {
+    resetStudentCountsUpdateSection('يرجى اختيار ملف Excel فقط.');
+    alert('يرجى اختيار ملف Excel فقط.');
+    return;
+  }
+  try {
+    pendingStudentCountWorkbookRows = await loadStudentCountsWorkbook(file);
+    pendingStudentCountFileName = file.name;
+    pendingStudentCountHeaders = collectStudentCountHeadersFromWorkbookRows(pendingStudentCountWorkbookRows);
+    const stSel = document.getElementById('studentNumberColumnSelect');
+    const statusSel = document.getElementById('studentStatusColumnSelect');
+    const opts = pendingStudentCountHeaders.map(h => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join('');
+    if (stSel) {
+      stSel.innerHTML = opts;
+      stSel.value = chooseDefaultHeader(pendingStudentCountHeaders, [/student\s*no/i,/student\s*number/i,/رقم\s*الطالب/i]) || stSel.value;
+    }
+    if (statusSel) {
+      statusSel.innerHTML = opts;
+      statusSel.value = chooseDefaultHeader(pendingStudentCountHeaders, [/remarks/i,/remark/i,/signature/i,/ملاحظات/i,/توقيع/i]) || statusSel.value;
+    }
+    document.getElementById('studentColumnMappingBox')?.classList.remove('hidden');
+    const summary = document.getElementById('studentCountsDiffSummary');
+    if (summary) summary.textContent = `تم اختيار ملف Excel: ${file.name}. اختر عمود رقم الطالب وعمود حالة الطالب ثم اضغط تحليل ومقارنة الأعداد.`;
+  } catch (err) {
+    console.error(err);
+    resetStudentCountsUpdateSection('تعذر قراءة ملف Excel.');
+    alert('تعذر قراءة ملف Excel.');
+  }
+}
 async function analyzeStudentCountsFile(){
   const file = document.getElementById('studentCountsPdfFile')?.files?.[0];
   const summary = document.getElementById('studentCountsDiffSummary');
   const table = document.getElementById('studentCountsDiffTable');
-  if (!file) return alert('يرجى اختيار ملف PDF أو Excel أولًا.');
-  if (summary) summary.textContent = 'جاري تحليل الملف ومقارنة الأعداد...';
+  if (!file) return alert('يرجى اختيار ملف Excel أولًا.');
+  if (!pendingStudentCountWorkbookRows.length || pendingStudentCountFileName !== file.name) await prepareStudentCountsFile();
+  if (!pendingStudentCountWorkbookRows.length) return;
+  if (summary) summary.textContent = 'جاري تحليل ملف Excel ومقارنة الأعداد...';
   if (table) table.innerHTML = '';
   try {
-    let flatRows = [];
-    const name = file.name.toLowerCase();
-    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-      const data = new Uint8Array(await file.arrayBuffer());
-      const wb = XLSX.read(data, { type:'array', cellDates:false });
-      wb.SheetNames.forEach(sn => flatRows.push(...XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'', raw:false })));
-    } else if (name.endsWith('.pdf')) {
-      flatRows = await extractRowsFromPdfFile(file);
-    } else return alert('نوع الملف غير مدعوم. استخدم PDF أو Excel.');
-    const counts = summarizeStudentCountsFromFlatRows(flatRows);
+    const counts = summarizeStudentCountsFromWorkbookRows(pendingStudentCountWorkbookRows);
     const examRows = getStoredExams();
     const examMap = new Map();
     examRows.forEach((r, idx) => {
@@ -2789,15 +2906,25 @@ async function analyzeStudentCountsFile(){
     const unmatched = counts.filter(c => !examMap.has(studentCountKey(c.courseCode, c.section))).length;
     if (summary) summary.textContent = `تم تحليل ${toArabicDigits(counts.length)} شعبة. توجد ${toArabicDigits(diffCount)} شعبة بها اختلاف في الأعداد. غير المطابق مع ملف الامتحانات: ${toArabicDigits(unmatched)}.`;
     if (table) {
-      const body = pendingStudentCountDiffs.map((x,i) => `<tr class="${x.diff===0?'diff-ok':Math.abs(Number(x.diff)||0)>1?'diff-strong':'diff-soft'}"><td><input type="checkbox" data-student-diff-index="${i}" ${x.selected?'checked':''} ${x.diff===0?'disabled':''}></td><td>${escapeHtml(x.courseName||'')}</td><td>${escapeHtml(x.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(x.section))}</td><td>${toArabicDigits(x.current)}</td><td>${toArabicDigits(x.total)}</td><td>${toArabicDigits(x.excluded)}</td><td>${toArabicDigits(x.actual)}</td><td>${toArabicDigits(x.diff)}</td></tr>`).join('');
-      const unmatchedRows = counts.filter(c => !examMap.has(studentCountKey(c.courseCode, c.section))).map(c => `<tr class="diff-unmatched"><td>—</td><td>${escapeHtml(c.courseName||'')}</td><td>${escapeHtml(c.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(c.section))}</td><td>غير مطابق</td><td>${toArabicDigits(c.total)}</td><td>${toArabicDigits(c.excluded)}</td><td>${toArabicDigits(c.actual)}</td><td>—</td></tr>`).join('');
-      table.innerHTML = `<table class="student-count-diff-table"><thead><tr><th>تحديد</th><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>العدد الحالي</th><th>إجمالي الملف</th><th>المستبعدون</th><th>العدد الفعلي</th><th>الفرق</th></tr></thead><tbody>${body || ''}${unmatchedRows || ''}${(!body && !unmatchedRows) ? '<tr><td colspan="9">لم يتم العثور على شعب قابلة للتحليل. تأكد من أن الملف يحتوي كود المقرر ورقم الشعبة وأرقام الطلبة كنص قابل للقراءة.</td></tr>' : ''}</tbody></table>`;
+      const controls = pendingStudentCountDiffs.some(x=>x.diff!==0) ? `<div class="student-diff-controls"><button id="selectAllStudentDiffsInlineBtn" class="secondary-btn" type="button">تحديد الكل</button><button id="clearAllStudentDiffsInlineBtn" class="secondary-btn" type="button">إلغاء تحديد الكل</button></div>` : '';
+      const body = pendingStudentCountDiffs.map((x,i) => `<tr class="${x.diff===0?'diff-ok':Math.abs(Number(x.diff)||0)>1?'diff-strong':'diff-soft'}"><td><input type="checkbox" data-student-diff-index="${i}" ${x.selected?'checked':''} ${x.diff===0?'disabled':''}></td><td><button class="link-like-btn" type="button" data-student-diff-details="${i}">${escapeHtml(x.courseName||'')}</button></td><td>${escapeHtml(x.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(x.section))}</td><td>${toArabicDigits(x.current)}</td><td>${toArabicDigits(x.total)}</td><td>${toArabicDigits(x.wCount)}</td><td>${toArabicDigits(x.fwCount)}</td><td>${toArabicDigits(x.excluded)}</td><td>${toArabicDigits(x.actual)}</td><td>${toArabicDigits(x.diff)}</td></tr>`).join('');
+      const unmatchedRows = counts.filter(c => !examMap.has(studentCountKey(c.courseCode, c.section))).map(c => `<tr class="diff-unmatched"><td>—</td><td>${escapeHtml(c.courseName||'')}</td><td>${escapeHtml(c.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(c.section))}</td><td>غير مطابق</td><td>${toArabicDigits(c.total)}</td><td>${toArabicDigits(c.wCount)}</td><td>${toArabicDigits(c.fwCount)}</td><td>${toArabicDigits(c.excluded)}</td><td>${toArabicDigits(c.actual)}</td><td>—</td></tr>`).join('');
+      table.innerHTML = `${controls}<table class="student-count-diff-table"><thead><tr><th>تحديد</th><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>العدد الحالي</th><th>إجمالي الملف</th><th>W</th><th>FW</th><th>إجمالي المستبعدين</th><th>العدد الفعلي</th><th>الفرق</th></tr></thead><tbody>${body || ''}${unmatchedRows || ''}${(!body && !unmatchedRows) ? '<tr><td colspan="11">لم يتم العثور على شعب قابلة للتحليل. تأكد من اختيار عمود رقم الطالب وعمود حالة الطالب بشكل صحيح.</td></tr>' : ''}</tbody></table>`;
+      const selectAll = () => document.querySelectorAll('[data-student-diff-index]:not(:disabled)').forEach(el => el.checked = true);
+      const clearAll = () => document.querySelectorAll('[data-student-diff-index]:not(:disabled)').forEach(el => el.checked = false);
+      document.getElementById('selectAllStudentDiffsInlineBtn')?.addEventListener('click', selectAll);
+      document.getElementById('clearAllStudentDiffsInlineBtn')?.addEventListener('click', clearAll);
+      table.querySelectorAll('[data-student-diff-details]').forEach(btn => btn.addEventListener('click', () => {
+        const x = pendingStudentCountDiffs[Number(btn.dataset.studentDiffDetails)];
+        if (!x) return;
+        alert(`تفاصيل الاستبعاد - ${x.courseName || x.courseCode}\n\nإجمالي الملف: ${x.total}\nW: ${x.wCount}\nFW: ${x.fwCount}\nإجمالي المستبعدين: ${x.excluded}\nالعدد الفعلي: ${x.actual}`);
+      }));
     }
     logAdminOperation('تحليل أعداد الطلبة', file.name);
   } catch (err) {
     console.error(err);
-    if (summary) summary.textContent = 'تعذر تحليل الملف. تأكد أن الملف صادر كنص قابل للقراءة وليس صورة ممسوحة.';
-    alert('تعذر تحليل الملف. إذا كان PDF ممسوحًا ضوئيًا فلن يمكن تحليله تلقائيًا.');
+    if (summary) summary.textContent = 'تعذر تحليل ملف Excel. تأكد من اختيار الأعمدة الصحيحة.';
+    alert('تعذر تحليل ملف Excel.');
   }
 }
 function applySelectedStudentCountUpdates(){
@@ -2809,6 +2936,7 @@ function applySelectedStudentCountUpdates(){
   selected.forEach(x => { if (rows[x.rowIndex]) setStudentsValue(rows[x.rowIndex], x.actual); });
   saveExams(rows); refreshAllExams(); updateStats('تم تحديث أعداد الطلبة المحددة.'); populateEditDates(); populateSettingsFilterOptions();
   logAdminOperation('اعتماد تحديث أعداد الطلبة', `${selected.length} شعبة`);
+  resetStudentCountsUpdateSection('تم اعتماد تحديث الأعداد المحددة ومسح ملف التحليل من الواجهة.');
   alert('تم اعتماد تحديث الأعداد المحددة بنجاح.');
 }
 
