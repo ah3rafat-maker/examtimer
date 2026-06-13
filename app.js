@@ -2449,7 +2449,11 @@ function initSettingsSidebar(){
   document.getElementById("studentCountsPdfFile")?.addEventListener("change", prepareStudentCountsFile);
   document.getElementById("analyzeStudentCountsBtn")?.addEventListener("click", analyzeStudentCountsFile);
   document.getElementById("applySelectedStudentCountsBtn")?.addEventListener("click", applySelectedStudentCountUpdates);
-  document.getElementById("cancelStudentCountsBtn")?.addEventListener("click", () => resetStudentCountsUpdateSection());
+  document.getElementById("cancelStudentCountsBtn")?.addEventListener("click", async () => {
+    const ok = await showConfirmModal("هل تريد إلغاء العملية؟ سيتم مسح ملف القوائم ونتائج التحليل الحالية.", "إلغاء تحديث أعداد الطلبة", { yesText:"نعم، إلغاء", noText:"العودة" });
+    if (!ok) return;
+    resetStudentCountsUpdateSection();
+  });
   document.getElementById("selectAllStudentDiffsBtn")?.addEventListener("click", () => document.querySelectorAll('[data-student-diff-index]:not(:disabled)').forEach(el => el.checked = true));
   document.getElementById("clearAllStudentDiffsBtn")?.addEventListener("click", () => document.querySelectorAll('[data-student-diff-index]:not(:disabled)').forEach(el => el.checked = false));
   renderOperationLog();
@@ -2679,7 +2683,9 @@ function normalizeHeaderName(value){
 }
 function isLikelyStudentNumber(value){
   const v = String(value || '').trim().replace(/\s+/g, '');
-  return /^\d{5,15}$/.test(v) || /^\d{3,8}[A-Z]\d{2,8}$/i.test(v);
+  // يستخدم هذا القسم عمود تسلسل الطالب. لذلك نقبل الأرقام القصيرة مثل 1، 2، 36،
+  // ونستمر أيضًا في قبول أرقام الطلبة الطويلة في حال اختار المستخدم ذلك العمود.
+  return /^\d{1,15}$/.test(v) || /^\d{3,8}[A-Z]\d{2,8}$/i.test(v);
 }
 function findHeaderRowInSheet(rows){
   let best = { index:-1, score:0, headers:[] };
@@ -2687,7 +2693,7 @@ function findHeaderRowInSheet(rows){
     const cells = (Array.isArray(row) ? row : [row]).map(clean);
     const joined = cells.join(' ').toLowerCase();
     let score = 0;
-    if (/student\s*no|student\s*number|رقم\s*الطالب/i.test(joined)) score += 4;
+    if (/student\s*no|student\s*number|serial|sequence|^\s*no\.?\s*$|\bno\.?\b|تسلسل|مسلسل|الرقم\s*المسلسل|رقم\s*الطالب/i.test(joined)) score += 4;
     if (/remarks|remark|signature|student'?s\s*signature|ملاحظات|الملاحظات|توقيع/i.test(joined)) score += 3;
     if (/student\s*name|اسم\s*الطالب/i.test(joined)) score += 1;
     if (cells.filter(Boolean).length >= 3) score += 1;
@@ -2718,7 +2724,7 @@ function buildHeaderMapFromHeaders(headers){
     if (clean(h) === selectedStatus) map.status = i;
   });
   if (map.studentNo === undefined) {
-    const i = (headers || []).findIndex(h => /student\s*no|student\s*number|رقم\s*الطالب/i.test(h));
+    const i = (headers || []).findIndex(h => /student\s*no|student\s*number|serial|sequence|^\s*no\.?\s*$|\bno\.?\b|تسلسل|مسلسل|الرقم\s*المسلسل|رقم\s*الطالب/i.test(h));
     if (i >= 0) map.studentNo = i;
   }
   if (map.status === undefined) {
@@ -2858,7 +2864,7 @@ async function prepareStudentCountsFile(){
     const opts = pendingStudentCountHeaders.map(h => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join('');
     if (stSel) {
       stSel.innerHTML = opts;
-      stSel.value = chooseDefaultHeader(pendingStudentCountHeaders, [/student\s*no/i,/student\s*number/i,/رقم\s*الطالب/i]) || stSel.value;
+      stSel.value = chooseDefaultHeader(pendingStudentCountHeaders, [/^\s*no\.?\s*$/i,/serial/i,/sequence/i,/تسلسل/i,/مسلسل/i,/student\s*no/i,/student\s*number/i,/رقم\s*الطالب/i]) || stSel.value;
     }
     if (statusSel) {
       statusSel.innerHTML = opts;
@@ -2866,7 +2872,7 @@ async function prepareStudentCountsFile(){
     }
     document.getElementById('studentColumnMappingBox')?.classList.remove('hidden');
     const summary = document.getElementById('studentCountsDiffSummary');
-    if (summary) summary.textContent = `تم اختيار ملف Excel: ${file.name}. اختر عمود رقم الطالب وعمود حالة الطالب ثم اضغط تحليل ومقارنة الأعداد.`;
+    if (summary) summary.textContent = `تم اختيار ملف Excel: ${file.name}. اختر عمود تسلسل الطالب وعمود حالة الطالب ثم اضغط تحليل ومقارنة الأعداد.`;
   } catch (err) {
     console.error(err);
     resetStudentCountsUpdateSection('تعذر قراءة ملف Excel.');
@@ -2907,18 +2913,13 @@ async function analyzeStudentCountsFile(){
     if (summary) summary.textContent = `تم تحليل ${toArabicDigits(counts.length)} شعبة. توجد ${toArabicDigits(diffCount)} شعبة بها اختلاف في الأعداد. غير المطابق مع ملف الامتحانات: ${toArabicDigits(unmatched)}.`;
     if (table) {
       const controls = pendingStudentCountDiffs.some(x=>x.diff!==0) ? `<div class="student-diff-controls"><button id="selectAllStudentDiffsInlineBtn" class="secondary-btn" type="button">تحديد الكل</button><button id="clearAllStudentDiffsInlineBtn" class="secondary-btn" type="button">إلغاء تحديد الكل</button></div>` : '';
-      const body = pendingStudentCountDiffs.map((x,i) => `<tr class="${x.diff===0?'diff-ok':Math.abs(Number(x.diff)||0)>1?'diff-strong':'diff-soft'}"><td><input type="checkbox" data-student-diff-index="${i}" ${x.selected?'checked':''} ${x.diff===0?'disabled':''}></td><td><button class="link-like-btn" type="button" data-student-diff-details="${i}">${escapeHtml(x.courseName||'')}</button></td><td>${escapeHtml(x.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(x.section))}</td><td>${toArabicDigits(x.current)}</td><td>${toArabicDigits(x.total)}</td><td>${toArabicDigits(x.wCount)}</td><td>${toArabicDigits(x.fwCount)}</td><td>${toArabicDigits(x.excluded)}</td><td>${toArabicDigits(x.actual)}</td><td>${toArabicDigits(x.diff)}</td></tr>`).join('');
+      const body = pendingStudentCountDiffs.map((x,i) => `<tr class="${x.diff===0?'diff-ok':Math.abs(Number(x.diff)||0)>1?'diff-strong':'diff-soft'}"><td><input type="checkbox" data-student-diff-index="${i}" ${x.selected?'checked':''} ${x.diff===0?'disabled':''}></td><td>${escapeHtml(x.courseName||'')}</td><td>${escapeHtml(x.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(x.section))}</td><td>${toArabicDigits(x.current)}</td><td>${toArabicDigits(x.total)}</td><td>${toArabicDigits(x.wCount)}</td><td>${toArabicDigits(x.fwCount)}</td><td>${toArabicDigits(x.excluded)}</td><td>${toArabicDigits(x.actual)}</td><td>${toArabicDigits(x.diff)}</td></tr>`).join('');
       const unmatchedRows = counts.filter(c => !examMap.has(studentCountKey(c.courseCode, c.section))).map(c => `<tr class="diff-unmatched"><td>—</td><td>${escapeHtml(c.courseName||'')}</td><td>${escapeHtml(c.courseCode)}</td><td>${escapeHtml(getSectionTypeLabel(c.section))}</td><td>غير مطابق</td><td>${toArabicDigits(c.total)}</td><td>${toArabicDigits(c.wCount)}</td><td>${toArabicDigits(c.fwCount)}</td><td>${toArabicDigits(c.excluded)}</td><td>${toArabicDigits(c.actual)}</td><td>—</td></tr>`).join('');
-      table.innerHTML = `${controls}<table class="student-count-diff-table"><thead><tr><th>تحديد</th><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>العدد الحالي</th><th>إجمالي الملف</th><th>W</th><th>FW</th><th>إجمالي المستبعدين</th><th>العدد الفعلي</th><th>الفرق</th></tr></thead><tbody>${body || ''}${unmatchedRows || ''}${(!body && !unmatchedRows) ? '<tr><td colspan="11">لم يتم العثور على شعب قابلة للتحليل. تأكد من اختيار عمود رقم الطالب وعمود حالة الطالب بشكل صحيح.</td></tr>' : ''}</tbody></table>`;
+      table.innerHTML = `${controls}<table class="student-count-diff-table"><thead><tr><th>تحديد</th><th>المقرر</th><th>الكود</th><th>الشعبة</th><th>العدد الحالي</th><th>إجمالي الملف</th><th>W</th><th>FW</th><th>إجمالي المستبعدين</th><th>العدد الفعلي</th><th>الفرق</th></tr></thead><tbody>${body || ''}${unmatchedRows || ''}${(!body && !unmatchedRows) ? '<tr><td colspan="11">لم يتم العثور على شعب قابلة للتحليل. تأكد من اختيار عمود تسلسل الطالب وعمود حالة الطالب بشكل صحيح.</td></tr>' : ''}</tbody></table>`;
       const selectAll = () => document.querySelectorAll('[data-student-diff-index]:not(:disabled)').forEach(el => el.checked = true);
       const clearAll = () => document.querySelectorAll('[data-student-diff-index]:not(:disabled)').forEach(el => el.checked = false);
       document.getElementById('selectAllStudentDiffsInlineBtn')?.addEventListener('click', selectAll);
       document.getElementById('clearAllStudentDiffsInlineBtn')?.addEventListener('click', clearAll);
-      table.querySelectorAll('[data-student-diff-details]').forEach(btn => btn.addEventListener('click', () => {
-        const x = pendingStudentCountDiffs[Number(btn.dataset.studentDiffDetails)];
-        if (!x) return;
-        alert(`تفاصيل الاستبعاد - ${x.courseName || x.courseCode}\n\nإجمالي الملف: ${x.total}\nW: ${x.wCount}\nFW: ${x.fwCount}\nإجمالي المستبعدين: ${x.excluded}\nالعدد الفعلي: ${x.actual}`);
-      }));
     }
     logAdminOperation('تحليل أعداد الطلبة', file.name);
   } catch (err) {
@@ -2927,17 +2928,19 @@ async function analyzeStudentCountsFile(){
     alert('تعذر تحليل ملف Excel.');
   }
 }
-function applySelectedStudentCountUpdates(){
+async function applySelectedStudentCountUpdates(){
   if (!pendingStudentCountDiffs.length) return alert('لا توجد فروقات لاعتمادها.');
   if (!requireCloudForSharedSave()) return;
   const rows = getStoredExams();
   const selected = [...document.querySelectorAll('[data-student-diff-index]:checked')].map(el => pendingStudentCountDiffs[Number(el.dataset.studentDiffIndex)]).filter(x => x && x.diff !== 0);
   if (!selected.length) return alert('يرجى تحديد شعبة واحدة على الأقل للتحديث.');
+  const ok = await showConfirmModal("هل تريد اعتماد التحديث؟ سيتم تحديث أعداد الطلبة للشعب المحددة ثم مسح ملف القوائم ونتائج التحليل الحالية.", "اعتماد التحديث", { yesText:"اعتماد التحديث", noText:"إلغاء" });
+  if (!ok) return;
   selected.forEach(x => { if (rows[x.rowIndex]) setStudentsValue(rows[x.rowIndex], x.actual); });
   saveExams(rows); refreshAllExams(); updateStats('تم تحديث أعداد الطلبة المحددة.'); populateEditDates(); populateSettingsFilterOptions();
-  logAdminOperation('اعتماد تحديث أعداد الطلبة', `${selected.length} شعبة`);
+  logAdminOperation('اعتماد التحديث', `${selected.length} شعبة`);
   resetStudentCountsUpdateSection('تم اعتماد تحديث الأعداد المحددة ومسح ملف التحليل من الواجهة.');
-  alert('تم اعتماد تحديث الأعداد المحددة بنجاح.');
+  alert('تم اعتماد التحديث ومسح ملف القوائم من الواجهة بنجاح.');
 }
 
 function getReportSelectedSections(){
