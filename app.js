@@ -2742,7 +2742,7 @@ async function analyzeStudentCountsFile(){
   const file = document.getElementById('studentCountsPdfFile')?.files?.[0];
   const summary = document.getElementById('studentCountsDiffSummary');
   const table = document.getElementById('studentCountsDiffTable');
-  if (!file) return alert('يرجى اختيار ملف PDF أو Excel أولًا.');
+  if (!file) return alert('يرجى اختيار ملف Excel أولًا.');
   if (summary) summary.textContent = 'جاري تحليل الملف ومقارنة الأعداد...';
   if (table) table.innerHTML = '';
   try {
@@ -2754,7 +2754,7 @@ async function analyzeStudentCountsFile(){
       wb.SheetNames.forEach(sn => flatRows.push(...XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'', raw:false })));
     } else if (name.endsWith('.pdf')) {
       flatRows = await extractRowsFromPdfFile(file);
-    } else return alert('نوع الملف غير مدعوم. استخدم PDF أو Excel.');
+    } else return alert('نوع الملف غير مدعوم. استخدم Excel.');
     const counts = summarizeStudentCountsFromFlatRows(flatRows);
     const examRows = getStoredExams();
     const examMap = new Map();
