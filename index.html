@@ -176,10 +176,10 @@
 
             <section class="admin-card settings-card compact-card">
               <h2>تحديث أعداد الطلبة</h2>
-              <p class="soft-note">ارفع ملف PDF أو Excel الصادر من النظام، ثم اعرض الفروقات قبل اعتماد التحديث. سيتم تجميع الصفحات المتعددة للشعبة الواحدة تلقائيًا عند التحليل.</p>
+              <p class="soft-note">ارفع ملف Excel الصادر من النظام، ثم اعرض الفروقات قبل اعتماد التحديث. سيتم تجميع الصفحات المتعددة للشعبة الواحدة تلقائيًا عند التحليل.</p>
               <div class="settings-form-grid two-cols">
                 <label class="file-picker-label">اختيار ملف قوائم الشعب PDF أو Excel
-                  <input id="studentCountsPdfFile" type="file" accept=".pdf,.xlsx,.xls" />
+                  <input id="studentCountsPdfFile" type="file" accept=".xlsx,.xls" />
                 </label>
                 <label>رموز الاستبعاد
                   <input id="studentExclusionCodes" type="text" value="W, FW, Withdraw, Failing for unexcused absence" />
@@ -271,7 +271,8 @@
                 <label id="adminStatsWeekWrap" class="hidden">الأسبوع<select id="adminStatsWeekSelect"></select></label>
                 <label id="adminStatsPeriodWrap" class="hidden">الفترة<select id="adminStatsPeriodSelect"></select></label>
               </div>
-              <div id="adminStatsPlaceholder" class="placeholder-panel">اختر نطاق الإحصائية والبيانات المطلوبة لعرض النتائج.</div>
+              <div class="actions-row"><button id="showAdminStatsBtn" class="primary-btn" type="button">عرض الإحصائية</button></div>
+              <div id="adminStatsPlaceholder" class="placeholder-panel">اختر نطاق الإحصائية والبيانات المطلوبة ثم اضغط عرض الإحصائية.</div>
               <div id="adminStatsContent" class="hidden">
               <div class="overview-grid">
                 <div class="overview-card"><span>آخر تحديث للبيانات</span><strong id="statLastUpdate">غير محدد</strong></div>

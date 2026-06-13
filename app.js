@@ -2432,9 +2432,10 @@ function initSettingsSidebar(){
   buttons.forEach(btn => btn.addEventListener('click', () => showSection(btn.dataset.settingsSectionTarget)));
   const storedSettingsSection = localStorage.getItem('finalExamTimer.settings.activeSection');
   showSection(storedSettingsSection || buttons.find(b=>b.classList.contains('active'))?.dataset.settingsSectionTarget || 'exam-file');
-  ['absenceStatsScopeSelect','absenceStatsDaySelect','absenceStatsWeekSelect','absenceStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { window.__absenceStatsRequested = true; updateAdminAbsenceStats(); }));
-  ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { window.__adminStatsRequested = true; updateStatsScopeControls(); updateStats(); }));
+  ['absenceStatsScopeSelect','absenceStatsDaySelect','absenceStatsWeekSelect','absenceStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { resetAbsenceStatsView(); }));
+  ['adminStatsScopeSelect','adminStatsDaySelect','adminStatsWeekSelect','adminStatsPeriodSelect'].forEach(id => document.getElementById(id)?.addEventListener('change', () => { window.__adminStatsRequested = false; updateStatsScopeControls(); updateStats(); }));
   document.getElementById('showAbsenceStatsBtn')?.addEventListener('click', () => { window.__absenceStatsRequested = true; updateAdminAbsenceStats(); });
+  document.getElementById('showAdminStatsBtn')?.addEventListener('click', () => { window.__adminStatsRequested = true; updateStatsScopeControls(); updateStats(); });
   document.getElementById("analyzeStudentCountsBtn")?.addEventListener("click", analyzeStudentCountsFile);
   document.getElementById("applySelectedStudentCountsBtn")?.addEventListener("click", applySelectedStudentCountUpdates);
   renderOperationLog();
@@ -2475,17 +2476,21 @@ async function updateAdminAbsenceStats(){
     if (detailsBox) detailsBox.innerHTML = '<div class="placeholder-panel">يرجى اختيار البيانات المطلوبة لعرض الإحصائية.</div>';
     return;
   }
+
   populateSettingsFilterOptions();
   const allReqs = await getAllAbsenceRequestsForAdmin();
-  const reqs = filterRequestsByAdminScope(allReqs.filter(r => r.kind === 'absence'), 'absenceStats');
+  const reqs = filterRequestsByAdminScope((allReqs || []).filter(r => r.kind === 'absence'), 'absenceStats')
+    .filter(r => Number(r.absenceCount || 0) > 0);
   const scopedExams = filterExamsByAdminScope(getAllNormalizedExams(), 'absenceStats');
   const totalAbs = reqs.reduce((s,r)=>s+(Number(r.absenceCount)||0),0);
   const totalStudents = sumStudents(scopedExams);
   const rate = totalStudents ? ((totalAbs/totalStudents)*100).toFixed(2) : '0.00';
-  const summary = document.getElementById('absenceStatsSummary');
-  if (summary) summary.innerHTML = `<div><strong>${toArabicDigits(totalAbs)}</strong><span>إجمالي الغياب</span></div><div><strong>${toArabicDigits(totalStudents)}</strong><span>إجمالي الطلبة</span></div><div><strong>${toArabicDigits(rate)}%</strong><span>نسبة الغياب</span></div>`;
-  const details = document.getElementById('absenceStatsDetails');
-  if (details) {
+
+  if (summaryBox) {
+    summaryBox.innerHTML = `<div><strong>${toArabicDigits(totalAbs)}</strong><span>إجمالي الغياب</span></div><div><strong>${toArabicDigits(totalStudents)}</strong><span>إجمالي الطلبة</span></div><div><strong>${toArabicDigits(rate)}%</strong><span>نسبة الغياب</span></div>`;
+  }
+
+  if (detailsBox) {
     const rows = reqs.map(r => {
       const ex = findExamForAbsenceRequest(r);
       const registeredAt = r.createdAtMs ? new Intl.DateTimeFormat("ar-OM-u-nu-latn-ca-gregory", {dateStyle:"short", timeStyle:"short"}).format(new Date(r.createdAtMs)) : "";
@@ -2495,11 +2500,12 @@ async function updateAdminAbsenceStats(){
       const courseName = r.courseName || (ex && ex.courseName) || "";
       const courseCode = r.courseCode || (ex && ex.courseCode) || "";
       const section = r.sectionLabel || getSectionTypeLabel(r.section || (ex && ex.section) || "");
-      return `<tr><td>${escapeHtml(courseName)}</td><td>${escapeHtml(courseCode)}</td><td>${escapeHtml(section)}</td><td>${escapeHtml(toArabicDigits(examDate))}</td><td>${escapeHtml(periodText)}</td><td>${escapeHtml(hall)}</td><td>${toArabicDigits(Number(r.absenceCount)||0)}</td><td>${escapeHtml(toArabicDigits(registeredAt))}</td></tr>`;
+      return `<tr><td>${escapeHtml(courseName)}</td><td>${escapeHtml(courseCode)}</td><td>${escapeHtml(section)}</td><td>${escapeHtml(toArabicDigits(examDate))}</td><td>${escapeHtml(toArabicDigits(periodText))}</td><td>${escapeHtml(hall)}</td><td>${toArabicDigits(Number(r.absenceCount)||0)}</td><td>${escapeHtml(toArabicDigits(registeredAt))}</td></tr>`;
     }).join('');
-    details.innerHTML = `<table class="support-hall-table absence-report-table"><thead><tr><th>اسم المقرر</th><th>الكود</th><th>الشعبة</th><th>تاريخ الامتحان</th><th>الفترة الامتحانية</th><th>القاعة</th><th>عدد الغياب</th><th>توقيت التسجيل</th></tr></thead><tbody>${rows || '<tr><td colspan="8">لا توجد بيانات غياب</td></tr>'}</tbody></table>`;
+    detailsBox.innerHTML = `<table class="support-hall-table absence-report-table"><thead><tr><th>اسم المقرر</th><th>الكود</th><th>الشعبة</th><th>تاريخ الامتحان</th><th>الفترة الامتحانية</th><th>القاعة</th><th>عدد الغياب</th><th>توقيت التسجيل</th></tr></thead><tbody>${rows || '<tr><td colspan="8">لا توجد بيانات غياب ضمن النطاق المحدد</td></tr>'}</tbody></table>`;
   }
 }
+
 async function printAbsenceStatsReport(){
   await updateAdminAbsenceStats();
   const scope = document.getElementById('absenceStatsScopeSelect')?.value || 'all';
@@ -2736,7 +2742,7 @@ async function analyzeStudentCountsFile(){
   const file = document.getElementById('studentCountsPdfFile')?.files?.[0];
   const summary = document.getElementById('studentCountsDiffSummary');
   const table = document.getElementById('studentCountsDiffTable');
-  if (!file) return alert('يرجى اختيار ملف PDF أو Excel أولًا.');
+  if (!file) return alert('يرجى اختيار ملف Excel أولًا.');
   if (summary) summary.textContent = 'جاري تحليل الملف ومقارنة الأعداد...';
   if (table) table.innerHTML = '';
   try {
