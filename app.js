@@ -1192,6 +1192,17 @@ function periodMatchesFilter(requestObj, filterValue){
     return parsed && targetParsed && parsed.startMinutes === targetParsed.startMinutes && parsed.endMinutes === targetParsed.endMinutes;
   });
 }
+function makeExamKey(row){
+  if (!row) return "";
+
+  const date = String(row["التاريخ"] || row.date || "").trim();
+  const period = String(row["الفترة"] || row.period || "").trim();
+  const hall = String(row["القاعة"] || row.hall || "").trim();
+  const code = String(row["رمز المقرر"] || row.courseCode || "").trim();
+  const section = String(row["الشعبة"] || row.section || "").trim();
+
+  return [date, period, hall, code, section].join("|");
+}
 function findExamForAbsenceRequest(r){
   const exams = getAllNormalizedExams();
   if (!r) return null;
