@@ -2742,7 +2742,7 @@ async function analyzeStudentCountsFile(){
   const file = document.getElementById('studentCountsPdfFile')?.files?.[0];
   const summary = document.getElementById('studentCountsDiffSummary');
   const table = document.getElementById('studentCountsDiffTable');
-  if (!file) return alert('يرجى اختيار ملف Excel أولًا.');
+  if (!file) return alert('يرجى اختيار ملف PDF أو Excel أولًا.');
   if (summary) summary.textContent = 'جاري تحليل الملف ومقارنة الأعداد...';
   if (table) table.innerHTML = '';
   try {
