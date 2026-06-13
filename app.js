@@ -2561,31 +2561,65 @@ function looksLikeStudentRow(cells){
   }) || /\b\d{3,6}[A-Z]\d{2,6}\b/i.test(joined);
 }
 function cleanCourseNameFromStudentHeader(raw, code){
-  let s = String(raw || '').trim();
-  if (!s) return '';
+  const original = String(raw || '').trim();
+  if (!original) return '';
+  let suffix = '';
+  const suffixMatch = original.match(/\b[A-Z]{2,8}\s*\d{3,5}\s*-\s*(\d{1,3})\b/i);
+  if (suffixMatch) suffix = suffixMatch[1];
+
+  let s = original;
   s = s.replace(/Course\s*Name\s*[:\-]?/ig, '').replace(/Course\s*Title\s*[:\-]?/ig, '').replace(/اسم\s*المقرر\s*[:\-]?/ig, '');
-  // Remove course codes such as EDMA2213-3 wherever they appear, then keep the readable Arabic/English name.
-  s = s.replace(/\b[A-Z]{2,6}\d{3,5}\s*-?\s*\d*\b/gi, '');
-  if (code) s = s.replace(new RegExp(code + '\\s*-?\\s*\\d*', 'i'), '');
+  // Remove course codes such as EDMA2213-3 but preserve the trailing course number as part of the course name.
+  s = s.replace(/\b[A-Z]{2,8}\s*\d{3,5}\s*-\s*\d{1,3}\b/gi, '');
+  s = s.replace(/\b[A-Z]{2,8}\s*\d{3,5}\b/gi, '');
+  if (code) s = s.replace(new RegExp(code.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\s*-?\\s*\\d*', 'i'), '');
   s = s.replace(/[：:]+/g, ' ').replace(/\s+/g, ' ').trim();
   const arabic = s.match(/[\u0600-\u06FF][\u0600-\u06FF\s\d()\-–]+/);
-  if (arabic) return arabic[0].replace(/^[-–\s]+|[-–\s]+$/g, '').trim();
-  return s.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
+  let name = arabic ? arabic[0].replace(/^[-–\s]+|[-–\s]+$/g, '').trim() : s.replace(/^[:\-\s]+|[:\-\s]+$/g, '').trim();
+  if (suffix && name && !new RegExp('(^|\\s)' + suffix + '$').test(name)) name = `${name} ${suffix}`;
+  return name;
 }
 
+function rowHasExclusion
+
 function rowHasExclusion(cells, exclusion){
-  const rawJoined = (cells || []).map(x => String(x || '')).join(' ');
-  const normalizedJoined = normalizeStudentStatus(rawJoined);
-  const normalizedCells = (cells || []).map(normalizeStudentStatus).filter(Boolean);
+  const rawCells = (cells || []).map(x => String(x || '').trim()).filter(Boolean);
+  const rawJoined = rawCells.join(' ');
+  const normalizedCells = rawCells.map(normalizeStudentStatus).filter(Boolean);
   const exclusionList = (exclusion || []).map(normalizeStudentStatus).filter(Boolean);
+
+  // Exact-cell matching is always allowed. This prevents single-letter codes such as W from matching names like AL-WAHEIBI.
   if (normalizedCells.some(c => exclusionList.includes(c))) return true;
-  if (exclusionList.some(ex => ex && normalizedJoined.includes(ex))) return true;
-  if (exclusionList.includes('WITHDRAW') && /WITHDRAW/i.test(rawJoined)) return true;
-  if (exclusionList.includes('FAILINGFORUNEXCUSEDABSENCE') && /FAILING\s+FOR\s+UNEXCUSED\s+ABSENCE/i.test(rawJoined)) return true;
-  if (exclusionList.includes('FW') && normalizedCells.some(c => c === 'FW')) return true;
-  if (exclusionList.includes('W') && normalizedCells.some(c => c === 'W')) return true;
+
+  for (const ex of exclusionList) {
+    if (!ex) continue;
+    if (ex === 'W') {
+      if (rawCells.some(c => /^W$/i.test(c))) return true;
+      continue;
+    }
+    if (ex === 'FW') {
+      if (rawCells.some(c => /^FW$/i.test(c))) return true;
+      continue;
+    }
+    if (ex === 'WD') {
+      if (rawCells.some(c => /^WD$/i.test(c))) return true;
+      continue;
+    }
+    if (ex === 'WITHDRAW') {
+      if (/\bWITHDRAW(?:N|AL)?\b/i.test(rawJoined)) return true;
+      continue;
+    }
+    if (ex === 'FAILINGFORUNEXCUSEDABSENCE') {
+      if (/FAILING\s+FOR\s+UNEXCUSED\s+ABSENCE/i.test(rawJoined)) return true;
+      continue;
+    }
+    // Longer exclusion phrases can be matched as normalized substrings.
+    if (ex.length >= 3 && normalizeStudentStatus(rawJoined).includes(ex)) return true;
+  }
   return false;
 }
+
+function looksLikeCourseHeader
 
 function looksLikeCourseHeader(text){
   return /Course\s*Name|Course\s*Department|Section\s*No|Lecturer\s*Name|No\s*Of\s*Student|اسم\s*المقرر|الشعبة/i.test(String(text||''));

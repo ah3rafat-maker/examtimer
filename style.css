@@ -2017,3 +2017,36 @@ button#earlyEndBtn.early-end-btn:hover{background:#FFF7F7!important;border-color
 #studentCountsDiffTable .student-count-diff-table .diff-soft td{background:#FFF9E8!important;}
 #studentCountsDiffTable .student-count-diff-table .diff-strong td{background:#FFF1F1!important;}
 #studentCountsDiffTable .student-count-diff-table .diff-unmatched td{background:#F7F9FC!important;color:#526070!important;}
+
+
+/* v79: corrected student-count parsing and compact absence tables */
+#absenceStatsDetails{
+  overflow-x:auto!important;
+  width:100%;
+  border:1px solid #E6EEF7;
+  border-radius:14px;
+  background:#fff;
+  margin-top:10px;
+}
+#absenceStatsDetails .absence-report-table{
+  width:100%;
+  border-collapse:collapse!important;
+  table-layout:auto!important;
+  font-size:12px!important;
+  line-height:1.15!important;
+}
+#absenceStatsDetails .absence-report-table th,
+#absenceStatsDetails .absence-report-table td{
+  padding:5px 7px!important;
+  line-height:1.15!important;
+  vertical-align:middle!important;
+  border-bottom:1px solid #EEF2F7!important;
+  word-break:normal!important;
+  white-space:normal!important;
+  text-align:center!important;
+}
+#absenceStatsDetails .absence-report-table th{
+  background:#FFF3E7!important;
+  color:#0B2E6B!important;
+  font-weight:800!important;
+}
